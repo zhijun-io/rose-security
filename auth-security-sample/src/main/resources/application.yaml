@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: auth-security-sample
+
+auth:
+  security:
+    enabled: true
+    token:
+      enabled: false
