@@ -255,7 +255,7 @@ class JwtTokenAutoConfigurationTests {
                         "auth.security.jwt.audience=sample-api")
                 .run(context -> {
                     JwtTokenIssuer issuer = context.getBean(JwtTokenIssuer.class);
-                    IssuedAccessJwt jwt = issuer.issue(
+                    IssuedAccessToken token = issuer.issue(
                             User.withUsername("person@example.test")
                                     .password("unused")
                                     .authorities("ROLE_USER")

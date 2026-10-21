@@ -135,6 +135,7 @@ class RefreshUserSessionServiceTests {
             AuthSecurityProperties properties = new AuthSecurityProperties(
                     true,
                     new AuthSecurityProperties.Jwt(
+                            true,
                             Duration.ofMinutes(10),
                             Duration.ofDays(14),
                             Duration.ofDays(30),
@@ -199,7 +200,7 @@ class RefreshUserSessionServiceTests {
         @Override
         public synchronized RotationResult rotate(
                 String presentedTokenHash, String replacementTokenHash, Duration refreshTtl, Instant now) {
-            StoredRefreshJwt jwt = tokens.get(presentedTokenHash);
+            StoredRefreshToken token = tokens.get(presentedTokenHash);
             if (token == null) {
                 return new RotationResult(RotationStatus.INVALID, null);
             }
