@@ -24,9 +24,9 @@ Starter 提供安全协议和基础设施扩展点，不拥有业务用户模型
 | 本地登录标识 | 邮箱 | 已确认 |
 | OAuth 账号关联 | 参考 ThingsBoard，基于邮箱关联 | 已确认方向；邮箱可信度及冲突细则见待决事项 |
 | MFA | 默认关闭；启用时用户可选择并绑定可用方式；不使用 Security 7 内建 MFA 特性 | 已确认 |
-| MFA 类型 | TOTP、WebAuthn、Email、恢复码、BIP-39 助记词、EVM 钱包 | 已确认类型；钱包协议待定。助记词仅用于账号恢复和 MFA 验证，不用于登录 |
+| MFA 类型 | TOTP、WebAuthn、Email、恢复码、BIP-39 助记词、EVM 钱包 | 已确认类型；钱包协议待定。助记词是可绑定的常规 MFA 方式，只用于主认证后的二次验证，不可单独主登录或账号恢复 |
 | OAuth | Spring Security OAuth2 Client/OIDC Client；OAuth 注册信息可由数据库运行时提供 | 已确认 |
-| MFA/OAuth 配置 | 数据库存储和运行时配置，不要求从 YAML 配置每个因子或 IdP | 已确认；存储适配为可选模块 |
+| MFA/OAuth 配置 | MFA 支持配置文件驱动的静态默认策略，也支持宿主 `MfaPolicyProvider` Bean 整体替换；OAuth Client Registration 使用运行时配置源 | 已确认；用户凭证和一次性挑战由独立存储 Bean/适配持久化，不写入配置文件 |
 | Token | 短期 Access JWT + 长期 Refresh Token；Refresh Token 通过响应体传输；提供 JDBC/Redis 可选适配 | 已确认 |
 | JWT 与 Refresh 模式 | 可配置；关闭时只签发 Access Token，但仍建立与 Access Token 同寿命的服务端会话 | 当前实现要求 |
 | 认证端点实现 | 登录、登出、刷新经 Spring Security Filter Chain，不新增 MVC Controller | 已确认 |
@@ -40,7 +40,7 @@ Starter 提供安全协议和基础设施扩展点，不拥有业务用户模型
 - 待完成 MFA 状态采用服务端短时、不透明、一次性挑战；它不能作为 API Access Token 使用。
 - Starter 不规定浏览器存储方式。当前演示将 Token 保存在标签页级 `sessionStorage`，以支持页面重载后恢复；关闭标签页后清除，并在总览显示完整 Refresh Token。该示例仅用于演示，不能用于生产；`sessionStorage` 和页面展示的 Token 均可被同源脚本读取，生产应用需评估 XSS 风险，并按威胁模型选择内存加重新认证或 HttpOnly Cookie 等方案。
 - OAuth 首次登录不自动创建业务用户。只有按配置的邮箱映射策略成功匹配已有用户后，才创建 `(issuer, subject)` 外部身份关联。
-- 助记词采用 BIP-39 英文词表、12 词，并由应用侧预先生成后交给用户；仅用于账号恢复和 MFA 验证，不用作登录凭证、TOTP 秘钥或钱包私钥。助记词与密码同属知识因子，不能单独满足要求独立因子的高保障策略。
+- 助记词采用 BIP-39 英文词表、12 词，由应用侧预先生成后交给用户绑定为 MFA 凭证；只用于主认证后的二次验证，不可单独主登录或账号恢复，也不用作 TOTP 秘钥或钱包私钥。Starter 不负责账号恢复业务。
 
 ## 3. 待决定事项
 
@@ -52,10 +52,10 @@ Starter 提供安全协议和基础设施扩展点，不拥有业务用户模型
 | JWT 密钥部署 | 默认 RS256 实现使用宿主 `JWKSource` 或配置的 PEM；公开 JWKS 和多 `kid` 支持 | 不可导出的 KMS/HSM 私钥需由宿主替换 `JwtTokenIssuer` 与 `JwtDecoder`；需确定部署环境和签名权限边界 |
 | `iss`、`aud` 和 Token TTL | 每环境显式设置；Access 短期、Refresh 中长期 | API 消费方必须校验同一发行者和受众；配置缺失时生产启动失败 |
 | Refresh 生命周期 | 推荐绝对期限 + 可选滑动期限、家族记录和单次轮换 | 确认是否采用滑动续期、会话最大寿命和并发设备政策 |
-| MFA 策略 | 默认关闭；启用后允许用户选择并绑定；应用策略可要求特定用户/操作完成 MFA | 需定义“启用后、用户尚未绑定因子”时是否强制注册。建议默认密码登录成功但标记待注册，仅敏感策略要求时拦截 |
+| MFA 策略 | 默认关闭；启用后允许用户选择并绑定；应用策略可要求特定用户/操作完成 MFA | 策略要求 MFA 而用户尚无因素时，采用受限的首次绑定事务；不签发完整 Token。未强制 MFA 的用户可按个人意愿绑定 |
 | WebAuthn | 管理员配置 RP ID 和精确 Origin allowlist | RP ID 必须是部署域名的有效域；跨域、反向代理、开发域名需单独配置 |
 | 钱包认证 | 仅 EVM；建议 SIWE / EIP-4361，并明确链 ID allowlist | 链 ID、钱包签名兼容范围、地址规范化、是否接受合约钱包/智能账户需确认 |
-| BIP-39 账号恢复与 MFA | 12 词英文，预生成；用于账号恢复和 MFA 验证，不作为登录方式 | 各用途需独立绑定、启停和撤销；确认生成、交付、轮换和恢复后会话吊销规则。作为知识因子时不能与密码组合冒充独立因子 |
+| BIP-39 助记词 MFA 凭证 | 12 词英文，预生成；绑定后用于主认证后的 MFA 验证 | 由应用安全生成并交付；以带盐的抗暴力口令哈希保存验证值；不能作为钱包 seed/private key 或账号恢复凭证 |
 | OAuth 邮箱关联 | 仅在 IdP 明确返回 `email_verified=true` 时自动匹配；持久化 `(iss,sub)`；无已验证邮箱不自动关联 | 确认是否允许人工账号关联、邮箱冲突人工处理、IdP 更换/账号解绑规则；不得仅以当前邮箱重关联既有 `(iss,sub)` |
 | 令牌返回与 SPA | Refresh Token 通过响应体返回；当前演示用标签页级 `sessionStorage` 保存以支持重载恢复，并显示完整 Refresh Token；OAuth 回调使用一次性兑换码再由前端 POST 兑换 | 明文展示和浏览器存储仅为演示取舍，不可用于生产；兑换码 TTL 与允许的 SPA 回调 URL allowlist 待确认 |
 | 会话后端 | 生产环境至少一个共享、支持原子比较与更新的 JDBC 或 Redis 后端 | 确认数据库种类、Redis 可用性目标；多实例即时撤销需要共享查询能力 |
@@ -132,9 +132,9 @@ rose-security-spring-boot-starter/          # 仓库目录
 
 ### 配置来源
 
-MFA 因子开关、用户 MFA 策略、WebAuthn RP/Origin、EVM 链 allowlist、OAuth Client Registration 等可运行时变更的业务安全配置放在数据库，由 `MfaPolicyProvider`、`OAuthClientRegistrationProvider` 读取。数据库中的 Client Secret 等秘密必须使用外部密钥加密；加密根密钥从 KMS/Vault/宿主 `SecretProtector` 提供，不能与密文同库明文保存。
+MFA 系统策略（总开关、可用因素及适用范围）的默认实现读取配置文件；宿主提供 `MfaPolicyProvider` Bean 时，自动配置回退并整体采用宿主策略，不与配置驱动策略逐字段合并。没有配置策略且没有该 Bean 时 MFA 关闭。RP ID、Origin 等协议参数由相应静态配置提供；宿主如需数据库运行时策略，可在 `MfaPolicyProvider` 实现中读取数据库。OAuth Client Registration 使用运行时配置源。用户凭证和一次性挑战是可变运行状态，不以应用配置文件作为其存储；由宿主存储 Bean 承载，后续是否提供 JDBC/Redis 适配按实际需求决定。MFA 策略可由宿主依据其 `UserDetails`、`GrantedAuthority`、用户属性或业务规则判断是否要求用户完成 MFA；Starter 不定义角色、权限、用户组或租户模型，也不解析权限名称。MFA 成功不授予业务权限，API 授权仍由宿主的 Spring Security 规则负责。默认 JWT 不包含角色/权限 claim；需要授权 claim 的应用由宿主自定义 Token 签发及 Resource Server 映射。数据库中的 Client Secret 等秘密必须使用外部密钥加密；加密根密钥从 KMS/Vault/宿主 `SecretProtector` 提供，不能与密文同库明文保存。
 
-`@ConfigurationProperties` 仅用于稳定部署参数，例如端点路径、JWT 与 Refresh 模式、JWT issuer/audience、TTL 和外部 RSA PEM 文件路径。默认 JWT 功能启用；Nimbus 编码器/解码器通过 JWKSource 获取密钥；密钥来源可由宿主提供 JWKSource、使用外部 PEM 文件路径生成默认 JWKSource，或直接提供 Spring `JwtEncoder` 和 `JwtDecoder`。MFA 全局策略默认关闭；MFA 因子及策略、OAuth Client Registration 的启用状态由数据库运行时配置提供。不要用 YAML 保存真实密钥内容；密钥文件由外部密钥管理设施挂载并限制读取权限。数据库配置需版本化并广播/轮询失效通知，集群中各节点一致应用；OAuth 配置更新时允许进行中的 state/nonce 回调按原注册版本完成或明确失效。
+`@ConfigurationProperties` 可承载 MFA 静态系统策略，默认关闭；宿主提供 `MfaPolicyProvider` Bean 时，后者整体替换配置驱动策略，二者都没有时 MFA 关闭。默认 JWT 功能启用；Nimbus 编码器/解码器通过 JWKSource 获取密钥；密钥来源可由宿主提供 JWKSource、使用外部 PEM 文件路径生成默认 JWKSource，或直接提供 Spring `JwtEncoder` 和 `JwtDecoder`。不要用 YAML 保存真实密钥内容；密钥文件由外部密钥管理设施挂载并限制读取权限。数据库运行时策略由宿主 Bean 负责一致性；OAuth 配置更新时允许进行中的 state/nonce 回调按原注册版本完成或明确失效。
 
 ### 建议端点
 
@@ -143,13 +143,14 @@ MFA 因子开关、用户 MFA 策略、WebAuthn RP/Origin、EVM 链 allowlist、
 | 用途 | 默认路径/方法 |
 |---|---|
 | 本地邮箱登录 | `POST /api/auth/login` |
-| MFA 完成/挑战验证 | `POST /api/auth/mfa/challenges/{challengeId}/verify` |
+| 查询 MFA 可用方式 | `GET /api/auth/mfa/options` |
+| MFA 登录挑战/验证 | `POST /api/auth/mfa/challenge`、`POST /api/auth/mfa/verify` |
 | 刷新 Token | `POST /api/auth/refresh` |
 | 当前会话登出 | `POST /api/auth/logout` |
 | 全部会话撤销 | `POST /api/auth/logout-all` |
 | 查询会话 | `GET /api/auth/sessions` |
 | 撤销指定会话 | `DELETE /api/auth/sessions/{sessionId}` |
-| 因子列表/绑定/确认/解绑/恢复码 | `/api/auth/mfa/**` |
+| 当前用户 MFA 设置/绑定/确认/解绑/恢复码 | `/api/me/mfa/**` |
 | OAuth 登录开始 | `GET /oauth2/authorization/{registrationId}` |
 | OAuth 回调 | `GET /login/oauth2/code/{registrationId}` |
 | OAuth 一次性兑换 | `POST /api/auth/oauth2/exchange` |
@@ -198,7 +199,7 @@ auth:
 
 - Refresh JWT 不采用长期不可撤销自验证形式。Session family 记录是续期和撤销的权威来源。可撤销 opaque Refresh 的代价是每次续期需共享存储；这是可接受的安全/可用性权衡。
 - 当前登出撤销当前 family；logout-all 撤销该用户所有 family；会话查询返回不敏感元信息，不能返回完整 Token。
-- 禁用用户、密码/主凭证变更、MFA 凭证/恢复信息变更、身份关联撤销和高风险安全事件应由宿主调用会话服务撤销 family，或通过 `UserSecurityVersionProvider` 提升 token version。
+- 禁用用户、密码/主凭证变更、MFA 凭证/恢复信息变更、身份关联撤销和高风险安全事件应由宿主调用会话服务撤销 family，或通过 `UserSecurityVersionProvider` 提升 token version；这会阻止后续刷新。会话撤销/版本提升本身不保证无状态 Access Token 即时失效；即时拒绝要求资源服务器逐请求检查共享会话状态或用户安全版本，否则已签发的 Access Token 最迟在其 TTL 到期后失效。
 - 即时 Access Token 撤销需要每次请求访问共享 denylist/session state 或检查用户安全版本；这会引入延迟和存储故障影响。推荐在严格即时撤销模式下 fail-closed。若只检查签名与过期，撤销上界为 Access TTL，应明确告知宿主。
 - 并发会话策略通过 `UserSessionConcurrencyPolicy` 扩展；默认最大活跃会话数为 0（无限制），可配置超限时拒绝新会话或原子撤销最早会话。自定义 `UserSessionStore` 必须覆盖带策略的原子创建方法，否则启用正数上限时会 fail-closed。
 
@@ -216,32 +217,9 @@ JWKS 端点固定为 `GET /.well-known/jwks.json`，在 JWT 启用且存在 JWKS
 
 ## 8. MFA 状态机与因子
 
-### 策略和阶段状态
+MFA 当前未实现。完整的状态模型、系统策略与用户设置分离、过滤器流程、默认端点、因子要求、与 `skills/samples/mfa-demo` 的对照及待决事项见 [MFA 实现方案](mfa-implementation-plan.md)。BIP-39 助记词按常规 MFA 因子处理，仅用于主认证后的二次验证。
 
-全局默认关闭；开启后可用因子由 DB 配置，用户可以自选并绑定。应用通过 `MfaPolicyProvider` 按用户、操作或风险策略要求 MFA。MFA 策略选择、具体用户数据和因子凭证分开存储。用户完成主凭证后若策略要求 MFA，返回受限、短时、单次的 pending challenge；只允许挑战列出的验证操作，任何普通业务 API 均拒绝。验证成功后原子消费挑战并签发完整 Token，记录 `amr`/认证时间。绑定、解绑、恢复等高风险操作应要求近期重新认证/现有因子证明。
-
-用户启用因子时使用独立因子 provider 生命周期：开始绑定 -> 产生待确认凭证 -> 用户证明 possession -> 持久化为 active -> challenge/verify -> unbind/recovery。绑定之前的密钥不可用于认证，解绑或重置必须使有关会话家族失效。失败次数和挑战过期由因子/挑战存储实现；不提供通用限流设施。
-
-因子机密按用途最小化存储：可验证值使用带强盐的哈希；必须恢复原值的 TOTP 秘密使用 `SecretProtector` 加密、密钥版本化、严格访问控制。日志、事件、API 错误响应和可观测性中禁止出现密码、TOTP 秘密、OTP、恢复码、助记词、WebAuthn 私密状态和完整 Token。
-
-### 因子规范
-
-| 因子 | 绑定/验证与存储规则 | 默认/外部依赖 |
-|---|---|---|
-| TOTP | CSPRNG 生成秘密，Base32/`otpauth` QR 仅在绑定期间展示；必须先提交一次有效 OTP 才激活；验证窗口窄且可配置，拒绝已接受时间步重放；秘密加密存储 | MFA 功能的一部分；需要宿主提供或配置凭证持久化和秘密保护能力 |
-| WebAuthn | 注册和认证都使用一次性 challenge；challenge 绑定用户、操作、RP ID、有效期；校验 clientData origin、challenge、RP ID hash、签名、credential ID/计数器及用户验证要求；使用后作废 | MFA 功能的一部分；依赖 RP ID 和精确 Origin 配置及凭证持久化；只有引入独立大型依赖时才考虑单独模块 |
-| Email | OTP 与用户、用途、挑战绑定；哈希存储、短时有效、成功一次消费；失败达到 challenge 自身尝试上限即作废；发送通过应用提供的邮件发送能力 | MFA 功能的一部分；接入应用提供发信实现、收件邮箱和持久存储 |
-| 恢复码 | 高熵随机码，只展示一次；仅保存哈希；成功使用立即原子失效；重新生成时旧码整批失效；全部丢失需应用受控身份恢复流程或人工核验，Starter 不冒充业务审批 | MFA/恢复功能的一部分；需要凭证持久化和宿主恢复流程 |
-| BIP-39 助记词 | 12 个英文 BIP-39 词，系统/应用预先生成并安全交付；只用于账号恢复或 MFA 挑战，不用于登录；不导出私钥、不派生钱包；不同用途独立绑定/撤销，数据库仅存安全验证器，明文只在首次安全展示/交付时可见 | MFA/恢复功能的一部分；需安全验证器、宿主交付及恢复流程；与密码同属知识因子，不能单独满足独立因子策略；不得日志记录 |
-| EVM 钱包 | 仅纳入 MFA；推荐 SIWE/EIP-4361 challenge，绑定域、URI、用户、操作、chain ID、nonce、issued/expiry；校验签名与规范化地址及允许链；nonce 单次消费；钱包变更需现有因子或重新认证 | MFA 功能的一部分；链清单 DB 配置，宿主提供地址归属策略/必要节点或合约钱包验证器；仅在依赖隔离有实际价值时单独拆模块 |
-
-钱包协议已确认仅 EVM，但 SIWE/EIP-4361、允许的 chain ID、EOA 与合约钱包范围仍需定案。链切换不得改变既有凭证归属；增加链或换钱包应按变更流程重新证明，并使相关会话失效。
-
-助记词是高价值长期知识凭证，只用于账号恢复和可选 MFA 验证，不作为登录方式。它与密码同属知识因子；密码加助记词不能宣称具备独立因子的多因素保障。恢复和 MFA 用途应分别绑定、启停和撤销，避免一个用途的变更意外影响其他用途。默认不能明文存储。单纯哈希允许离线猜测风险评估须基于词数/熵；若应用需可恢复原助记词，则必须使用外部密钥加密并承担密钥泄漏风险。遗失后按宿主身份恢复流程重新生成并吊销旧凭证和会话。助记词不能直接当作钱包 seed/private key。
-
-### MFA 审计
-
-Starter 不定义 MFA 审计事件或发布接口。需要记录绑定、解绑、验证、恢复码消费/轮换及配置变更的接入应用，应在其实现的 MFA 策略、存储或业务服务边界中记录，并自行确定用户关联信息、审计目的地与保留策略。日志或审计内容不得包含秘密、验证码、恢复码、助记词或完整 Token。
+关键约束：默认关闭；用户可关闭个人 MFA、移除最后一个因素，操作要求近期 MFA；强制策略不因用户关闭偏好而解除，无因素用户下次登录必须完成受限首次绑定；待完成 MFA 不能访问业务 API，也不能创建完整会话或签发 Token；成功后复用现有 `UserSessionService`；是否按用户/权限要求 MFA 由宿主策略决定，Starter 不管理权限且 MFA 不替代 API 授权；系统策略管理 API 由宿主负责，当前用户管理路径使用 `/api/me/mfa`；不采用 Spring Security 7 内建 MFA 编排，不新增 Starter 自有事件发布机制。
 
 ## 9. OAuth2/OIDC 客户端登录
 
@@ -256,7 +234,7 @@ IdP -> GET /login/oauth2/code/{registrationId}?code=...&state=...
      -> 联合身份映射扩展根据稳定 (issuer, subject) 查找已关联的本地邮箱
      -> 首登：仅按已验证邮箱关联既有本地用户；无匹配/冲突时拒绝自动关联
      -> 按本地用户安全状态和 MFA 策略完成后续认证
-     -> 产生短时、一次性 OAuth login exchange code
+     -> 若策略要求 MFA 且用户无因素，走受限首次绑定流程；完成 MFA/绑定后才产生短时、一次性 OAuth login exchange code
 SPA -> POST /api/auth/oauth2/exchange { code }
      <- 本系统 Access JWT + Refresh Token 响应体
 ```
@@ -317,7 +295,7 @@ OAuth 登录共享本地用户 MFA 策略。IdP 的 MFA 声明只有在 issuer�
 
 1. 创建父工程、BOM、core、autoconfigure、starter、sample；确定 API、类型安全配置、条件装配和端点契约。（已完成）
 2. 实现 JWT/JWKS 能力、刷新 Token 家族状态机、会话管理 SPI，再实现 JDBC/Redis 存储适配和并发测试。（JWT RS256 签发/验证、JWKS 端点、刷新会话服务、并发会话策略及 JDBC/Redis 适配已实现；以实际验证结果为准）
-3. 实现 MFA 公共流程和首批已确认因子；模块拆分以独立依赖或独立发布需求为依据，不按因子类型预建模块。BIP-39 只用于 MFA 验证和账号恢复，不作为登录方式。
+3. 实现 MFA 公共流程和首批已确认登录因素；模块拆分以独立依赖或独立发布需求为依据，不按因子类型预建模块。BIP-39 助记词作为常规 MFA 因子实现，不用于主登录或账号恢复。
 4. 使用 Spring Security OAuth2/OIDC Client 实现动态数据库注册、基于 `(issuer, subject)` 的本地用户映射和一次性 exchange 流程；映射结果由宿主 `UserDetailsService` 提供，不引入 Starter 自有用户 ID 类型。
 5. 补齐样例、接入和运维文档、兼容性矩阵、自动配置测试及安全检查，按实际运行结果发布。
 

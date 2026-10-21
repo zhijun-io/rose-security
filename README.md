@@ -260,4 +260,4 @@ mise exec -- ./mvnw test
 mise exec -- ./mvnw verify
 ```
 
-See [the design document](docs/rose-security-starter-design.md) for planned MFA and OAuth2/OIDC design and outstanding implementation work. See [the starter development prompt](docs/spring-security-starter-development-prompt.md) for project constraints and implementation conventions.
+See [the design document](docs/rose-security-starter-design.md) for overall planned capabilities and [the MFA implementation plan](docs/mfa-implementation-plan.md) for the detailed MFA flow and unresolved decisions. See [the starter development prompt](docs/spring-security-starter-development-prompt.md) for project constraints and implementation conventions.
