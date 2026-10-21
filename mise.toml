@@ -19,17 +19,17 @@ run_windows = "mvnw.cmd spotless:apply"
 
 [tasks.run]
 description = "Run the application"
-run = "./mvnw -f auth-security-sample/pom.xml spring-boot:run"
-run_windows = "mvnw.cmd -f auth-security-sample/pom.xml spring-boot:run"
+run = "./mvnw -f rose-security-sample/pom.xml spring-boot:run"
+run_windows = "mvnw.cmd -f rose-security-sample/pom.xml spring-boot:run"
 
 [tasks.frontend-install]
 description = "Install the sample frontend dependencies"
-run = "npm --prefix auth-security-sample/frontend install"
+run = "npm --prefix rose-security-sample/frontend install"
 
 [tasks.frontend-dev]
 description = "Run the React sample frontend with the API dev proxy"
-run = "npm --prefix auth-security-sample/frontend run dev"
+run = "npm --prefix rose-security-sample/frontend run dev"
 
 [tasks.frontend-build]
 description = "Build the React sample frontend into the sample application static resources"
-run = "npm --prefix auth-security-sample/frontend run build"
+run = "npm --prefix rose-security-sample/frontend run build"

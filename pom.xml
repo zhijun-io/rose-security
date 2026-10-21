@@ -11,44 +11,62 @@
         <relativePath/>
     </parent>
 
-    <groupId>dev.authstarter</groupId>
-    <artifactId>auth-security-spring-boot-starter-parent</artifactId>
+    <groupId>io.zhijun</groupId>
+    <artifactId>rose-security-spring-boot-starter-parent</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>Auth Security Spring Boot Starter Parent</name>
-    <description>Reusable authentication, MFA, OAuth2/OIDC client login and token sessions for Spring Boot APIs.
+    <name>Rose Security Spring Boot Starter Parent</name>
+    <description>Reusable JWT authentication and token session management for Spring Boot APIs.
     </description>
 
     <modules>
-        <module>auth-security-spring-boot-starter-bom</module>
-        <module>auth-security-core</module>
-        <module>auth-security-spring-boot-autoconfigure</module>
-        <module>auth-security-spring-boot-starter</module>
-        <module>auth-security-sample</module>
+        <module>rose-security-spring-boot-starter-bom</module>
+        <module>rose-security-spring-boot-core</module>
+        <module>rose-security-spring-boot-jdbc</module>
+        <module>rose-security-spring-boot-redis</module>
+        <module>rose-security-spring-boot-autoconfigure</module>
+        <module>rose-security-spring-boot-starter</module>
+        <module>rose-security-sample</module>
     </modules>
 
     <properties>
         <java.version>25</java.version>
         <maven.compiler.release>25</maven.compiler.release>
-        <auth-security.version>${project.version}</auth-security.version>
+        <rose-security.version>${project.version}</rose-security.version>
+        <ua-parser.version>1.6.1</ua-parser.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>dev.authstarter</groupId>
-                <artifactId>auth-security-core</artifactId>
-                <version>${auth-security.version}</version>
+                <groupId>com.github.ua-parser</groupId>
+                <artifactId>uap-java</artifactId>
+                <version>${ua-parser.version}</version>
             </dependency>
             <dependency>
-                <groupId>dev.authstarter</groupId>
-                <artifactId>auth-security-spring-boot-autoconfigure</artifactId>
-                <version>${auth-security.version}</version>
+                <groupId>io.zhijun</groupId>
+                <artifactId>rose-security-spring-boot-core</artifactId>
+                <version>${rose-security.version}</version>
             </dependency>
             <dependency>
-                <groupId>dev.authstarter</groupId>
-                <artifactId>auth-security-spring-boot-starter</artifactId>
-                <version>${auth-security.version}</version>
+                <groupId>io.zhijun</groupId>
+                <artifactId>rose-security-spring-boot-autoconfigure</artifactId>
+                <version>${rose-security.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.zhijun</groupId>
+                <artifactId>rose-security-spring-boot-jdbc</artifactId>
+                <version>${rose-security.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.zhijun</groupId>
+                <artifactId>rose-security-spring-boot-redis</artifactId>
+                <version>${rose-security.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.zhijun</groupId>
+                <artifactId>rose-security-spring-boot-starter</artifactId>
+                <version>${rose-security.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
