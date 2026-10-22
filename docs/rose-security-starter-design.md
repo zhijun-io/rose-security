@@ -1,6 +1,6 @@
 # Rose Security Spring Boot Starter 设计方案
 
-- 状态：设计基线；本地认证、JWT、Token 会话及 JDBC/Redis 会话适配已实现；MFA、OAuth2/OIDC 待实现
+- 状态：设计基线；本地认证、JWT、Token 会话、JDBC/Redis 会话适配及 TOTP MFA 完整基础流程已实现；其他 MFA 因子与 OAuth2/OIDC 待实现
 - 项目：`rose-security-spring-boot-starter`
 - 文档日期：2026-10-21
 - 当前项目版本基线：Java 25、Spring Boot 4.1.1、Spring Security 7、Maven（以根 `pom.xml` 为准）
@@ -52,7 +52,7 @@ Starter 提供安全协议和基础设施扩展点，不拥有业务用户模型
 | JWT 密钥部署 | 默认 RS256 实现使用宿主 `JWKSource` 或配置的 PEM；公开 JWKS 和多 `kid` 支持 | 不可导出的 KMS/HSM 私钥需由宿主替换 `JwtTokenIssuer` 与 `JwtDecoder`；需确定部署环境和签名权限边界 |
 | `iss`、`aud` 和 Token TTL | 每环境显式设置；Access 短期、Refresh 中长期 | API 消费方必须校验同一发行者和受众；配置缺失时生产启动失败 |
 | Refresh 生命周期 | 推荐绝对期限 + 可选滑动期限、家族记录和单次轮换 | 确认是否采用滑动续期、会话最大寿命和并发设备政策 |
-| MFA 策略 | 默认关闭；启用后允许用户选择并绑定；应用策略可要求特定用户/操作完成 MFA | 策略要求 MFA 而用户尚无因素时，采用受限的首次绑定事务；不签发完整 Token。未强制 MFA 的用户可按个人意愿绑定 |
+| MFA 策略 | 默认关闭；启用后用户可选择并绑定允许的方式；仅对已绑定因素的用户执行登录二次验证 | 未绑定因素或已移除全部因素的用户仍可使用密码登录；不提供强制 MFA 或首次绑定登录事务 |
 | WebAuthn | 管理员配置 RP ID 和精确 Origin allowlist | RP ID 必须是部署域名的有效域；跨域、反向代理、开发域名需单独配置 |
 | 钱包认证 | 仅 EVM；建议 SIWE / EIP-4361，并明确链 ID allowlist | 链 ID、钱包签名兼容范围、地址规范化、是否接受合约钱包/智能账户需确认 |
 | BIP-39 助记词 MFA 凭证 | 12 词英文，预生成；绑定后用于主认证后的 MFA 验证 | 由应用安全生成并交付；以带盐的抗暴力口令哈希保存验证值；不能作为钱包 seed/private key 或账号恢复凭证 |
@@ -126,13 +126,13 @@ rose-security-spring-boot-starter/          # 仓库目录
 - Access JWT 是无状态的：撤销 family 会立即阻止后续 refresh，但已签发 Access Token 默认仍可用到其短期过期。若要求即时拒绝，需要接入资源服务器侧按 `sid` 查询会话/安全版本的校验器；当前尚未提供该校验器。
 - `UserSecurityVersionProvider` 版本变化会在刷新时撤销对应会话并拒绝新 Token。账号禁用状态同时由 Spring `UserDetails` 标记，刷新时重新加载并检查；宿主仍需在密码、MFA 或身份关联等安全变更时递增安全版本或撤销会话。
 
-当前已暴露可选的过滤器 configurer `AuthSecurityConfigurer`，由宿主使用 `http.with(authSecurityConfigurer, Customizer.withDefaults())` 显式加入自己的安全链；Starter 不自动注册 `SecurityFilterChain`。登录与刷新使用 Spring Security `AuthenticationFilter`，登出及全会话登出使用 `LogoutFilter`。过滤器不使用 Cookie；宿主仍须按自身链规则 permit 这些 POST 路由，并为这些无 Cookie 认证接口配置 CSRF ignore（或在纯 Bearer API 链中关闭 CSRF）。当前密码认证成功后直接创建 Token 会话；MFA 流程尚未实现。
+当前已暴露可选的过滤器 configurer `AuthSecurityConfigurer`，由宿主使用 `http.with(authSecurityConfigurer, Customizer.withDefaults())` 显式加入自己的安全链；Starter 不自动注册 `SecurityFilterChain`。登录、MFA 验证与刷新使用 Spring Security `AuthenticationFilter`，登出及全会话登出使用 `LogoutFilter`。过滤器不使用 Cookie；宿主仍须按自身链规则 permit 这些 POST 路由，并为这些无 Cookie 认证接口配置 CSRF ignore（或在纯 Bearer API 链中关闭 CSRF）。MFA 默认关闭；仅已绑定且被允许的因素会触发 pending 登录事务；未绑定用户直接通过密码登录。事务存储和因素 `AuthenticationProvider` 由宿主提供。
 
 ## 6. 配置模型与默认端点
 
 ### 配置来源
 
-MFA 系统策略（总开关、可用因素及适用范围）的默认实现读取配置文件；宿主提供 `MfaPolicyProvider` Bean 时，自动配置回退并整体采用宿主策略，不与配置驱动策略逐字段合并。没有配置策略且没有该 Bean 时 MFA 关闭。RP ID、Origin 等协议参数由相应静态配置提供；宿主如需数据库运行时策略，可在 `MfaPolicyProvider` 实现中读取数据库。OAuth Client Registration 使用运行时配置源。用户凭证和一次性挑战是可变运行状态，不以应用配置文件作为其存储；由宿主存储 Bean 承载，后续是否提供 JDBC/Redis 适配按实际需求决定。MFA 策略可由宿主依据其 `UserDetails`、`GrantedAuthority`、用户属性或业务规则判断是否要求用户完成 MFA；Starter 不定义角色、权限、用户组或租户模型，也不解析权限名称。MFA 成功不授予业务权限，API 授权仍由宿主的 Spring Security 规则负责。默认 JWT 不包含角色/权限 claim；需要授权 claim 的应用由宿主自定义 Token 签发及 Resource Server 映射。数据库中的 Client Secret 等秘密必须使用外部密钥加密；加密根密钥从 KMS/Vault/宿主 `SecretProtector` 提供，不能与密文同库明文保存。
+MFA 系统策略（总开关、可用因素及适用范围）的默认实现读取配置文件；宿主提供 `MfaPolicyProvider` Bean 时，自动配置回退并整体采用宿主策略，不与配置驱动策略逐字段合并。没有配置策略且没有该 Bean 时 MFA 关闭。RP ID、Origin 等协议参数由相应静态配置提供；宿主如需数据库运行时策略，可在 `MfaPolicyProvider` 实现中读取数据库。OAuth Client Registration 使用运行时配置源。用户凭证和一次性挑战是可变运行状态，不以应用配置文件作为其存储；由宿主存储 Bean 承载，后续是否提供 JDBC/Redis 适配按实际需求决定。宿主 `MfaPolicyProvider` 返回该用户已绑定且允许用于登录的 MFA 因素；Starter 不支持按 `UserDetails`、`GrantedAuthority` 或业务规则强制 MFA。MFA 成功不授予业务权限，API 授权仍由宿主的 Spring Security 规则负责。默认 JWT 不包含角色/权限 claim；需要授权 claim 的应用由宿主自定义 Token 签发及 Resource Server 映射。数据库中的 Client Secret 等秘密必须使用外部密钥加密；加密根密钥从 KMS/Vault/宿主 `SecretProtector` 提供，不能与密文同库明文保存。
 
 `@ConfigurationProperties` 可承载 MFA 静态系统策略，默认关闭；宿主提供 `MfaPolicyProvider` Bean 时，后者整体替换配置驱动策略，二者都没有时 MFA 关闭。默认 JWT 功能启用；Nimbus 编码器/解码器通过 JWKSource 获取密钥；密钥来源可由宿主提供 JWKSource、使用外部 PEM 文件路径生成默认 JWKSource，或直接提供 Spring `JwtEncoder` 和 `JwtDecoder`。不要用 YAML 保存真实密钥内容；密钥文件由外部密钥管理设施挂载并限制读取权限。数据库运行时策略由宿主 Bean 负责一致性；OAuth 配置更新时允许进行中的 state/nonce 回调按原注册版本完成或明确失效。
 
@@ -174,6 +174,7 @@ auth:
     endpoints:
       base-path: /api/auth
       login: /login
+      mfa-verify: /mfa/verify
       refresh: /refresh
       logout: /logout
       logout-all: /logout-all
@@ -187,7 +188,7 @@ auth:
 
 ### 签发和验证
 
-1. 登录主凭证验证成功后，生成随机 `jti`、会话 family ID 和短期 Access JWT。MFA 尚未实现。
+1. 登录主凭证验证成功后，若用户没有已绑定且启用的 MFA 因素，则直接创建会话并签发短期 Access JWT；若存在可用因素，则只创建短时 pending 事务，验证成功后才创建会话并签发 JWT。
 2. Access Token 由 Spring `JwtEncoder` 签发；默认 Nimbus 实现使用 JWKSource 选取 RS256 签名键并验证 issuer、audience 和时间声明。默认单密钥源使用公钥指纹作为 `kid`；多密钥源必须配置 `auth.security.jwt.active-key-id`，并确保该值匹配当前签名密钥。API 使用 Spring Security JWT Resource Server 验证签名。不要自建 JWT 解析过滤器。
 3. Refresh Token 是 CSPRNG 产生的高熵不透明随机值；HTTP 响应体返回，存储仅保存不可逆哈希、family、用户、安全版本、过期时间、轮换状态和必要设备元信息。
 4. Refresh 请求在存储事务中验证当前 token 哈希且未使用，再原子标记旧 token 已消费并创建新 token。同一旧 token 的并发提交中只有一个轮换操作能成功；其他提交被识别为重放并撤销 family。发生这种并发时，先成功轮换的请求可能已经签发短期 Access Token，但该 family 已撤销，后续刷新会失败；Access JWT 仍遵守无状态验证语义，默认有效到自身过期。客户端应对刷新请求做 single-flight，避免正常并发请求触发重放处理。
@@ -217,9 +218,9 @@ JWKS 端点固定为 `GET /.well-known/jwks.json`，在 JWT 启用且存在 JWKS
 
 ## 8. MFA 状态机与因子
 
-MFA 当前未实现。完整的状态模型、系统策略与用户设置分离、过滤器流程、默认端点、因子要求、与 `skills/samples/mfa-demo` 的对照及待决事项见 [MFA 实现方案](mfa-implementation-plan.md)。BIP-39 助记词按常规 MFA 因子处理，仅用于主认证后的二次验证。
+MFA 默认关闭。当前提供已绑定 MFA 用户的 pending 登录响应、`/mfa/verify` 过滤器、TOTP RFC 6238 服务与 Spring `AuthenticationProvider`，以及 TOTP 状态、绑定、确认和验证解绑过滤器。事务 Store 和加密 TOTP 凭证 Store 由宿主实现；宿主在自有 `SecurityFilterChain` 中授权管理路径。其他因子和配置管理尚未实现。完整状态模型、端点规划、因子要求和未决事项见 [MFA 实现方案](mfa-implementation-plan.md)。BIP-39 助记词按常规 MFA 因子处理，仅用于主认证后的二次验证。
 
-关键约束：默认关闭；用户可关闭个人 MFA、移除最后一个因素，操作要求近期 MFA；强制策略不因用户关闭偏好而解除，无因素用户下次登录必须完成受限首次绑定；待完成 MFA 不能访问业务 API，也不能创建完整会话或签发 Token；成功后复用现有 `UserSessionService`；是否按用户/权限要求 MFA 由宿主策略决定，Starter 不管理权限且 MFA 不替代 API 授权；系统策略管理 API 由宿主负责，当前用户管理路径使用 `/api/me/mfa`；不采用 Spring Security 7 内建 MFA 编排，不新增 Starter 自有事件发布机制。
+关键约束：默认关闭；用户可移除最后一个因素；绑定和移除通过对应因素的验证码确认；变更 MFA 不撤销会话或强制退出；不提供强制 MFA 或无因素用户的首次绑定登录事务；待完成 MFA 不能访问业务 API，也不能创建完整会话或签发 Token；成功后复用现有 `UserSessionService`；Starter 不管理权限且 MFA 不替代 API 授权；系统策略管理 API 由宿主负责，当前用户管理路径使用 `/api/me/mfa`；不采用 Spring Security 7 内建 MFA 编排，不新增 Starter 自有事件发布机制。
 
 ## 9. OAuth2/OIDC 客户端登录
 
@@ -233,8 +234,8 @@ IdP -> GET /login/oauth2/code/{registrationId}?code=...&state=...
      -> Spring Security 校验 state/nonce、交换授权码并验证 OIDC 身份
      -> 联合身份映射扩展根据稳定 (issuer, subject) 查找已关联的本地邮箱
      -> 首登：仅按已验证邮箱关联既有本地用户；无匹配/冲突时拒绝自动关联
-     -> 按本地用户安全状态和 MFA 策略完成后续认证
-     -> 若策略要求 MFA 且用户无因素，走受限首次绑定流程；完成 MFA/绑定后才产生短时、一次性 OAuth login exchange code
+     -> 若本地用户已绑定允许的 MFA 因素则完成后续验证，否则直接继续
+     -> 若用户已绑定允许的 MFA 因素，先完成 MFA；否则直接产生短时、一次性 OAuth login exchange code
 SPA -> POST /api/auth/oauth2/exchange { code }
      <- 本系统 Access JWT + Refresh Token 响应体
 ```
@@ -265,7 +266,7 @@ OAuth 登录共享本地用户 MFA 策略。IdP 的 MFA 声明只有在 issuer�
 
 ### 规划中，当前未实现
 
-- MFA pending 状态机、因子 SPI、OAuth2/OIDC Client 登录适配。
+- MFA 具体因子及凭证管理、OAuth2/OIDC Client 登录适配。
 - MFA、WebAuthn、EVM 可选模块。
 
 ### 接入应用必须提供

@@ -1,6 +1,12 @@
 spring:
   application:
     name: rose-security-sample
+  mail:
+    host: localhost
+    port: 1025
+    properties:
+      mail.smtp.auth: false
+      mail.smtp.starttls.enable: false
 
 auth:
   security:
@@ -11,3 +17,13 @@ auth:
       refresh-absolute-ttl: 8h
       issuer: https://rose-security-sample.local
       audience: rose-security-sample-api
+    mfa:
+      enabled: true
+      methods:
+        - totp
+        - email
+        - webauthn
+      totp-issuer: Rose Security Sample
+      webauthn-rp-id: localhost
+      webauthn-allowed-origins:
+        - http://localhost:8083

@@ -2,11 +2,11 @@ package io.zhijun.security.autoconfigure;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
-import tools.jackson.core.JacksonException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.AuthenticationConverter;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Converts the Starter's email/password JSON request into Spring Security authentication. */

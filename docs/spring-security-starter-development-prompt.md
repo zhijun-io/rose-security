@@ -9,7 +9,7 @@
 
 - 以仓库构建文件和项目文档为事实来源。当前仓库基线为 Java 25、Spring Boot 4.1.1、Spring Security 7、Maven；修改前重新核对实际配置，不得根据本机 JDK 或其他项目推断、擅自升级或降级。
 - 项目用于前后端分离应用的后端。Starter 当前提供或正在实现本地邮箱/密码认证、短期 JWT Access Token、可撤销且轮换的 opaque Refresh Token 会话，以及登录、刷新和登出过滤器集成。
-- MFA 当前不在实现范围：不得添加或恢复 MFA 代码、依赖、配置、端点、扩展接口或运行时流程。MFA 留待后续单独任务。
+- 当前 MFA 已实现可选的 TOTP/Email 登录二次验证及当前用户状态、绑定、确认、验证解绑端点；用户无已绑定因素时仍可密码登录，不提供强制 MFA 或首次绑定登录事务。除非本次任务明确涉及 MFA，不得顺带扩展其他因子或改动已实现流程。
 - OAuth2/OIDC 的范围是本系统作为客户端接入第三方身份提供方，成功后由本系统签发自己的 Token；绝不实现 OAuth2 授权服务器。OAuth2/OIDC 当前尚未实现，仅在本次任务明确涉及它时才实现。
 - Refresh Token 当前通过响应体传输。登录、刷新、登出等认证流程使用 Spring Security 过滤器，不为这些流程新增 MVC Controller，除非本次任务明确要求。
 - Token 会话存储的 JDBC/Redis 适配器是可选集成；不得把数据库、Redis、邮件、钱包、IdP 或特定云厂商绑定进核心模块。
@@ -59,7 +59,7 @@
 - 持久化与外部服务使用最小必要接口；核心模块不依赖 JDBC、Redis、邮件服务、钱包库、区块链节点或 OAuth 提供方 SDK。
 - 认证成功/失败、登出、刷新重放等扩展优先使用 Spring Security 原生事件或宿主可替换的 Handler。事件不得携带密码、密钥、验证码、恢复凭证或完整 Token；不要增加 Starter 自有事件发布机制。
 - Starter 不规定 ProblemDetail 或其他错误 JSON。认证过滤器使用接入方提供的 `AuthenticationFailureHandler`；其他 API 的认证失败/授权拒绝沿用宿主链上的 `AuthenticationEntryPoint` 和 `AccessDeniedHandler`。
-- 如未来实现 MFA，应作为单独确认的任务设计，不得在本次范围内顺带实现。实现时必须先确认各因子的协议与生命周期，并保证 MFA 未完成前不签发完整权限 Token。
+- 扩展 MFA 时，先确认新增因子的协议与生命周期，复用现有 pending 登录事务、Spring `AuthenticationProvider`、用户因素存储和过滤器链边界；保持 MFA 未完成前不签发完整权限 Token。不要重做已实现的 TOTP 生命周期。
 
 ## 文档要求
 

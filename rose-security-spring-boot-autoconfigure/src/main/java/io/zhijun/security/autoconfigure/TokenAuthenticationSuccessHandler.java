@@ -88,6 +88,16 @@ public class TokenAuthenticationSuccessHandler implements AuthenticationSuccessH
             return null;
         }
         try {
+            if (authentication.getDetails() instanceof MfaLoginCompletion completion) {
+                java.util.Set<String> methods =
+                        new java.util.HashSet<>(completion.transaction().authenticationMethods());
+                methods.add(completion.method());
+                return userSessionService.create(
+                        principal,
+                        methods,
+                        completion.authenticatedAt(),
+                        completion.transaction().clientInfo());
+            }
             return userSessionService.create(
                     principal, Set.of("pwd"), clock.instant(), clientInfoSource.buildDetails(request));
         } catch (RuntimeException exception) {
@@ -112,7 +122,10 @@ public class TokenAuthenticationSuccessHandler implements AuthenticationSuccessH
             return;
         }
         try {
-            remoteLoginHandler.handle(user.getUsername(), clientInfoSource.buildDetails(request), tokens.sessionId());
+            UserSessionClientInfo clientInfo = authentication.getDetails() instanceof MfaLoginCompletion completion
+                    ? completion.transaction().clientInfo()
+                    : clientInfoSource.buildDetails(request);
+            remoteLoginHandler.handle(user.getUsername(), clientInfo, tokens.sessionId());
         } catch (RuntimeException exception) {
             logger.warn("Remote-login handling failed; the authenticated response was already written");
         }

@@ -14,8 +14,7 @@ class AuthSecurityAutoConfigurationTests {
             .withConfiguration(
                     AutoConfigurations.of(AuthSecurityAutoConfiguration.class, ValidationAutoConfiguration.class))
             .withPropertyValues(
-                    "auth.security.jwt.issuer=https://auth.example.test",
-                    "auth.security.jwt.audience=sample-api");
+                    "auth.security.jwt.issuer=https://auth.example.test", "auth.security.jwt.audience=sample-api");
 
     @Test
     void registersDefaultsWithoutTakingOverSecurityFilterChain() {
@@ -29,7 +28,41 @@ class AuthSecurityAutoConfigurationTests {
             assertThat(properties.sessionConcurrency().whenLimitReached())
                     .isEqualTo(io.zhijun.security.core.UserSessionConcurrencyPolicy.LimitBehavior.DENY_NEW);
             assertThat(properties.remoteLogin().enabled()).isFalse();
+            assertThat(properties.mfa().enabled()).isFalse();
+            assertThat(properties.endpoints().mfaVerify()).isEqualTo("/mfa/verify");
         });
+    }
+
+    @Test
+    void bindsMfaPolicyAndVerificationEndpoint() {
+        contextRunner
+                .withPropertyValues(
+                        "auth.security.mfa.enabled=true",
+                        "auth.security.mfa.methods[0]=totp",
+                        "auth.security.mfa.transaction-ttl=3m",
+                        "auth.security.mfa.maximum-attempts=4",
+                        "auth.security.endpoints.mfa-verify=/factor/check")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    AuthSecurityProperties properties = context.getBean(AuthSecurityProperties.class);
+                    assertThat(properties.mfa().enabled()).isTrue();
+                    assertThat(properties.mfa().methods()).containsExactly("totp");
+                    assertThat(properties.mfa().transactionTtl()).isEqualTo(java.time.Duration.ofMinutes(3));
+                    assertThat(properties.mfa().maximumAttempts()).isEqualTo(4);
+                    assertThat(properties.endpoints().mfaVerify()).isEqualTo("/factor/check");
+                });
+    }
+
+    @Test
+    void rejectsMfaEndpointCollision() {
+        contextRunner
+                .withPropertyValues("auth.security.endpoints.login=/same", "auth.security.endpoints.mfa-verify=/same")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining(
+                                    "Authentication endpoint paths must be absolute paths and must not collide");
+                });
     }
 
     @Test
@@ -41,11 +74,13 @@ class AuthSecurityAutoConfigurationTests {
 
     @Test
     void validatesTokenConfigurationWhenIssuanceIsEnabled() {
-        contextRunner.withPropertyValues("auth.security.jwt.issuer=", "auth.security.jwt.audience=").run(context -> {
-            assertThat(context).hasFailed();
-            assertThat(context.getStartupFailure())
-                    .hasStackTraceContaining("Enabled token issuance requires issuer and audience");
-        });
+        contextRunner
+                .withPropertyValues("auth.security.jwt.issuer=", "auth.security.jwt.audience=")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining("Enabled token issuance requires issuer and audience");
+                });
     }
 
     @Test

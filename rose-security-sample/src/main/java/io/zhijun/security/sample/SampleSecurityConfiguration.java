@@ -14,11 +14,25 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
+import org.springframework.security.web.webauthn.management.MapPublicKeyCredentialUserEntityRepository;
+import org.springframework.security.web.webauthn.management.MapUserCredentialRepository;
+import org.springframework.security.web.webauthn.management.PublicKeyCredentialUserEntityRepository;
+import org.springframework.security.web.webauthn.management.UserCredentialRepository;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Example host-owned chain. The starter does not create a catch-all chain. */
 @Configuration(proxyBeanMethods = false)
 public class SampleSecurityConfiguration {
+
+    @Bean
+    PublicKeyCredentialUserEntityRepository sampleWebAuthnUsers() {
+        return new MapPublicKeyCredentialUserEntityRepository();
+    }
+
+    @Bean
+    UserCredentialRepository sampleWebAuthnCredentials() {
+        return new MapUserCredentialRepository();
+    }
 
     @Bean
     AuthenticationFailureHandler sampleAuthenticationFailureHandler(JsonMapper jsonMapper) {
@@ -47,7 +61,10 @@ public class SampleSecurityConfiguration {
                                 "/api/auth/login",
                                 "/api/auth/refresh",
                                 "/api/auth/logout",
-                                "/api/auth/logout-all")
+                                "/api/auth/logout-all",
+                                "/api/auth/mfa/verify")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/mfa/webauthn/options")
                         .permitAll()
                         .requestMatchers(JwksEndpoint.PATH)
                         .permitAll()

@@ -1,9 +1,12 @@
 package io.zhijun.security.autoconfigure;
 
+import io.zhijun.security.core.MfaPolicyProvider;
 import io.zhijun.security.core.UserSessionClientInfo;
 import io.zhijun.security.core.UserSessionService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -15,7 +18,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.authentication.AuthenticationEntryPointFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
@@ -70,6 +76,28 @@ public class AuthSecurityFilterAutoConfiguration {
                 properties.remoteLogin().enabled());
     }
 
+    @Bean("authSecurityMfaAwareLoginSuccessHandler")
+    @ConditionalOnMissingBean(name = "authSecurityMfaAwareLoginSuccessHandler")
+    AuthenticationSuccessHandler authSecurityMfaAwareLoginSuccessHandler(
+            @Qualifier("authSecurityLoginSuccessHandler") AuthenticationSuccessHandler loginSuccessHandler,
+            MfaPolicyProvider mfaPolicyProvider,
+            ObjectProvider<MfaLoginTransactionService> transactionServices,
+            ObjectProvider<EmailMfaService> emailMfaServices,
+            AuthenticationFailureHandler authenticationFailureHandler,
+            AuthenticationDetailsSource<HttpServletRequest, UserSessionClientInfo> clientInfoSource,
+            JsonMapper jsonMapper,
+            Clock clock) {
+        return new MfaAwareLoginSuccessHandler(
+                loginSuccessHandler,
+                mfaPolicyProvider,
+                transactionServices.getIfAvailable(),
+                emailMfaServices.getIfAvailable(),
+                authenticationFailureHandler,
+                clientInfoSource,
+                jsonMapper,
+                clock);
+    }
+
     @Bean("authSecurityRefreshSuccessHandler")
     @ConditionalOnMissingBean(name = "authSecurityRefreshSuccessHandler")
     AuthenticationSuccessHandler authSecurityRefreshSuccessHandler(
@@ -100,16 +128,46 @@ public class AuthSecurityFilterAutoConfiguration {
             UserSessionService userSessionService,
             AuthSecurityProperties properties,
             JsonMapper jsonMapper,
-            @Qualifier("authSecurityLoginSuccessHandler") AuthenticationSuccessHandler loginSuccessHandler,
+            @Qualifier("authSecurityMfaAwareLoginSuccessHandler") AuthenticationSuccessHandler loginSuccessHandler,
             @Qualifier("authSecurityRefreshSuccessHandler") AuthenticationSuccessHandler refreshSuccessHandler,
             @Qualifier("authSecurityLogoutHandler") LogoutHandler logoutHandler,
             @Qualifier("authSecurityLogoutSuccessHandler") LogoutSuccessHandler logoutSuccessHandler,
-            AuthenticationFailureHandler authenticationFailureHandler)
+            AuthenticationFailureHandler authenticationFailureHandler,
+            ObjectProvider<MfaLoginTransactionService> mfaTransactionServices,
+            MfaPolicyProvider mfaPolicyProvider,
+            ObjectProvider<AuthenticationProvider> authenticationProviders,
+            ObjectProvider<TotpMfaService> totpMfaServices,
+            ObjectProvider<EmailMfaService> emailMfaServices,
+            ObjectProvider<WebAuthnMfaService> webAuthnMfaServices,
+            ObjectProvider<UserDetailsService> userDetailsServices,
+            Clock clock)
             throws Exception {
         AuthenticationManager authenticationManager = authenticationManagers.getIfAvailable();
         if (authenticationManager == null) {
             authenticationManager = authenticationConfiguration.getAuthenticationManager();
         }
+        List<AuthenticationProvider> factorProviders =
+                new ArrayList<>(authenticationProviders.orderedStream().toList());
+        TotpMfaService totpMfaService = totpMfaServices.getIfAvailable();
+        EmailMfaService emailMfaService = emailMfaServices.getIfAvailable();
+        WebAuthnMfaService webAuthnMfaService = webAuthnMfaServices.getIfAvailable();
+        UserDetailsService userDetailsService = userDetailsServices.getIfAvailable();
+        if (totpMfaService != null
+                && userDetailsService != null
+                && factorProviders.stream().noneMatch(TotpAuthenticationProvider.class::isInstance)) {
+            factorProviders.add(new TotpAuthenticationProvider(totpMfaService, userDetailsService));
+        }
+        if (emailMfaService != null
+                && userDetailsService != null
+                && factorProviders.stream().noneMatch(EmailMfaAuthenticationProvider.class::isInstance)) {
+            factorProviders.add(new EmailMfaAuthenticationProvider(emailMfaService, userDetailsService, clock));
+        }
+        if (webAuthnMfaService != null
+                && userDetailsService != null
+                && factorProviders.stream().noneMatch(WebAuthnMfaAuthenticationProvider.class::isInstance)) {
+            factorProviders.add(new WebAuthnMfaAuthenticationProvider(webAuthnMfaService, userDetailsService, clock));
+        }
+        AuthenticationManager factorAuthenticationManager = new ProviderManager(factorProviders, authenticationManager);
         return new AuthSecurityConfigurer(
                 authenticationManager,
                 userSessionService,
@@ -119,6 +177,13 @@ public class AuthSecurityFilterAutoConfiguration {
                 refreshSuccessHandler,
                 logoutHandler,
                 logoutSuccessHandler,
-                authenticationFailureHandler);
+                authenticationFailureHandler,
+                mfaTransactionServices.getIfAvailable(),
+                clock,
+                mfaPolicyProvider,
+                factorAuthenticationManager,
+                totpMfaService,
+                emailMfaService,
+                webAuthnMfaService);
     }
 }

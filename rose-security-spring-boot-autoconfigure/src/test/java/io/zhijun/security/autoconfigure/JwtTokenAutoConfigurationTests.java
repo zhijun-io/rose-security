@@ -57,8 +57,7 @@ class JwtTokenAutoConfigurationTests {
                 .withBean(JwtDecoder.class, () -> token -> null)
                 .withBean(UserSessionService.class, NoopUserSessionService::new)
                 .withPropertyValues(
-                        "auth.security.jwt.issuer=https://auth.example.test",
-                        "auth.security.jwt.audience=sample-api")
+                        "auth.security.jwt.issuer=https://auth.example.test", "auth.security.jwt.audience=sample-api")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(JwksEndpoint.class);
@@ -86,8 +85,7 @@ class JwtTokenAutoConfigurationTests {
                 .withBean(JWKSource.class, () -> jwkSource)
                 .withBean(UserSessionService.class, NoopUserSessionService::new)
                 .withPropertyValues(
-                        "auth.security.jwt.issuer=https://auth.example.test",
-                        "auth.security.jwt.audience=sample-api")
+                        "auth.security.jwt.issuer=https://auth.example.test", "auth.security.jwt.audience=sample-api")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     JwtTokenIssuer issuer = context.getBean(JwtTokenIssuer.class);
@@ -161,8 +159,7 @@ class JwtTokenAutoConfigurationTests {
                 .withBean(JWKSource.class, () -> testJwkSource("first-key", "second-key"))
                 .withBean(UserSessionService.class, NoopUserSessionService::new)
                 .withPropertyValues(
-                        "auth.security.jwt.issuer=https://auth.example.test",
-                        "auth.security.jwt.audience=sample-api")
+                        "auth.security.jwt.issuer=https://auth.example.test", "auth.security.jwt.audience=sample-api")
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
@@ -251,8 +248,7 @@ class JwtTokenAutoConfigurationTests {
                 .withBean(UserSessionService.class, NoopUserSessionService::new)
                 .withBean(Clock.class, () -> fixedClock)
                 .withPropertyValues(
-                        "auth.security.jwt.issuer=https://auth.example.test",
-                        "auth.security.jwt.audience=sample-api")
+                        "auth.security.jwt.issuer=https://auth.example.test", "auth.security.jwt.audience=sample-api")
                 .run(context -> {
                     JwtTokenIssuer issuer = context.getBean(JwtTokenIssuer.class);
                     IssuedAccessToken token = issuer.issue(
@@ -277,8 +273,7 @@ class JwtTokenAutoConfigurationTests {
                 .withBean(JWKSource.class, () -> jwkSource)
                 .withBean(UserSessionService.class, NoopUserSessionService::new)
                 .withPropertyValues(
-                        "auth.security.jwt.issuer=https://auth.example.test",
-                        "auth.security.jwt.audience=sample-api")
+                        "auth.security.jwt.issuer=https://auth.example.test", "auth.security.jwt.audience=sample-api")
                 .run(context -> {
                     JwtEncoder encoder = context.getBean(JwtEncoder.class);
                     JwtDecoder decoder = context.getBean(JwtDecoder.class);

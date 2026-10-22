@@ -1,19 +1,23 @@
 package io.zhijun.security.autoconfigure;
 
+import io.zhijun.security.core.MfaPolicy;
+import io.zhijun.security.core.MfaPolicyProvider;
 import io.zhijun.security.core.UserSessionException;
 import io.zhijun.security.core.UserSessionService;
+import java.time.Clock;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AccountStatusUserDetailsChecker;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.web.authentication.AuthenticationEntryPointFailureHandler;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationFilter;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.LogoutHandler;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
@@ -26,6 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
 public final class AuthSecurityConfigurer extends AbstractHttpConfigurer<AuthSecurityConfigurer, HttpSecurity> {
 
     private final AuthenticationManager loginAuthenticationManager;
+    private final AuthenticationManager mfaFactorAuthenticationManager;
     private final UserSessionService userSessionService;
     private final AuthSecurityProperties properties;
     private final JsonMapper jsonMapper;
@@ -34,29 +39,14 @@ public final class AuthSecurityConfigurer extends AbstractHttpConfigurer<AuthSec
     private final LogoutHandler logoutHandler;
     private final LogoutSuccessHandler logoutSuccessHandler;
     private final AuthenticationFailureHandler authenticationFailureHandler;
+    private final MfaLoginTransactionService mfaLoginTransactionService;
+    private final Clock clock;
+    private final MfaPolicyProvider mfaPolicyProvider;
+    private final TotpMfaService totpMfaService;
+    private final EmailMfaService emailMfaService;
+    private final WebAuthnMfaService webAuthnMfaService;
 
-    public AuthSecurityConfigurer(
-            AuthenticationManager loginAuthenticationManager,
-            UserSessionService userSessionService,
-            AuthSecurityProperties properties,
-            JsonMapper jsonMapper,
-            AuthenticationSuccessHandler loginSuccessHandler,
-            AuthenticationSuccessHandler refreshSuccessHandler,
-            LogoutHandler logoutHandler,
-            LogoutSuccessHandler logoutSuccessHandler) {
-        this(
-                loginAuthenticationManager,
-                userSessionService,
-                properties,
-                jsonMapper,
-                loginSuccessHandler,
-                refreshSuccessHandler,
-                logoutHandler,
-                logoutSuccessHandler,
-                new AuthenticationEntryPointFailureHandler(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
-    }
-
-    public AuthSecurityConfigurer(
+    AuthSecurityConfigurer(
             AuthenticationManager loginAuthenticationManager,
             UserSessionService userSessionService,
             AuthSecurityProperties properties,
@@ -65,8 +55,16 @@ public final class AuthSecurityConfigurer extends AbstractHttpConfigurer<AuthSec
             AuthenticationSuccessHandler refreshSuccessHandler,
             LogoutHandler logoutHandler,
             LogoutSuccessHandler logoutSuccessHandler,
-            AuthenticationFailureHandler authenticationFailureHandler) {
+            AuthenticationFailureHandler authenticationFailureHandler,
+            MfaLoginTransactionService mfaLoginTransactionService,
+            Clock clock,
+            MfaPolicyProvider mfaPolicyProvider,
+            AuthenticationManager mfaFactorAuthenticationManager,
+            TotpMfaService totpMfaService,
+            EmailMfaService emailMfaService,
+            WebAuthnMfaService webAuthnMfaService) {
         this.loginAuthenticationManager = loginAuthenticationManager;
+        this.mfaFactorAuthenticationManager = mfaFactorAuthenticationManager;
         this.userSessionService = userSessionService;
         this.properties = properties;
         this.jsonMapper = jsonMapper;
@@ -75,6 +73,12 @@ public final class AuthSecurityConfigurer extends AbstractHttpConfigurer<AuthSec
         this.logoutHandler = logoutHandler;
         this.logoutSuccessHandler = logoutSuccessHandler;
         this.authenticationFailureHandler = authenticationFailureHandler;
+        this.mfaLoginTransactionService = mfaLoginTransactionService;
+        this.clock = clock;
+        this.mfaPolicyProvider = mfaPolicyProvider;
+        this.totpMfaService = totpMfaService;
+        this.emailMfaService = emailMfaService;
+        this.webAuthnMfaService = webAuthnMfaService;
     }
 
     @Override
@@ -99,6 +103,70 @@ public final class AuthSecurityConfigurer extends AbstractHttpConfigurer<AuthSec
         loginFilter.setSuccessHandler(loginSuccessHandler);
         loginFilter.setFailureHandler(authenticationFailureHandler);
         http.addFilterBefore(loginFilter, UsernamePasswordAuthenticationFilter.class);
+
+        if (mfaLoginTransactionService != null) {
+            AuthenticationManager mfaAuthenticationManager = authentication -> {
+                if (!(authentication instanceof MfaVerificationAuthenticationToken request)) {
+                    throw new BadCredentialsException("Authentication failed");
+                }
+                try {
+                    MfaLoginTransactionService.VerifiedLogin verified = mfaLoginTransactionService.verify(
+                            request.transactionToken(),
+                            request.method(),
+                            (String) request.getCredentials(),
+                            mfaFactorAuthenticationManager,
+                            clock.instant(),
+                            properties.mfa().maximumAttempts());
+                    if (!(verified.authentication().getPrincipal() instanceof UserDetails user)) {
+                        throw new BadCredentialsException("Authentication failed");
+                    }
+                    new AccountStatusUserDetailsChecker().check(user);
+                    if (mfaPolicyProvider != null) {
+                        MfaPolicy currentPolicy = mfaPolicyProvider.policyFor(user);
+                        if (!currentPolicy.enabled() || !currentPolicy.methods().contains(verified.method())) {
+                            throw new BadCredentialsException("Authentication failed");
+                        }
+                    }
+                    UsernamePasswordAuthenticationToken completed = UsernamePasswordAuthenticationToken.authenticated(
+                            user, null, verified.authentication().getAuthorities());
+                    completed.setDetails(
+                            new MfaLoginCompletion(verified.transaction(), verified.method(), clock.instant()));
+                    return completed;
+                } finally {
+                    request.eraseCredentials();
+                }
+            };
+            AuthenticationFilter mfaFilter = new AuthenticationFilter(
+                    mfaAuthenticationManager, new JsonMfaVerificationAuthenticationConverter(jsonMapper));
+            mfaFilter.setRequestMatcher(post(path(endpoints, endpoints.mfaVerify())));
+            mfaFilter.setSecurityContextRepository(new NullSecurityContextRepository());
+            mfaFilter.setSuccessHandler(loginSuccessHandler);
+            mfaFilter.setFailureHandler(authenticationFailureHandler);
+            http.addFilterBefore(mfaFilter, UsernamePasswordAuthenticationFilter.class);
+        }
+
+        if (properties.mfa().enabled()
+                && ((totpMfaService != null && properties.mfa().methods().contains("totp"))
+                        || (emailMfaService != null
+                                && properties.mfa().methods().contains("email"))
+                        || (webAuthnMfaService != null
+                                && properties.mfa().methods().contains("webauthn")))) {
+            WebAuthnMfaService configuredWebAuthnMfaService =
+                    properties.mfa().methods().contains("webauthn") ? webAuthnMfaService : null;
+            MfaManagementFilter mfaManagementFilter = new MfaManagementFilter(
+                    endpoints.meMfa(),
+                    path(endpoints, endpoints.webauthnOptions()),
+                    totpMfaService,
+                    emailMfaService,
+                    properties.mfa(),
+                    properties.mfa().totpIssuer(),
+                    jsonMapper,
+                    authenticationFailureHandler,
+                    clock,
+                    configuredWebAuthnMfaService,
+                    mfaLoginTransactionService);
+            http.addFilterAfter(mfaManagementFilter, BearerTokenAuthenticationFilter.class);
+        }
 
         if (properties.jwt().refreshEnabled()) {
             AuthenticationManager refreshAuthenticationManager = authentication -> {

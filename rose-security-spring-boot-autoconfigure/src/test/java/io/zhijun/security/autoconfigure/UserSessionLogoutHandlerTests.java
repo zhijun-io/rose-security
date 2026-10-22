@@ -43,7 +43,8 @@ class UserSessionLogoutHandlerTests {
 
         assertThat(revokedUsername).hasValue(USERNAME);
         assertThat(revokedSessionId).hasValue("session-1");
-        assertThat(request.getAttribute(UserSessionLogoutHandler.FAILURE_ATTRIBUTE)).isNull();
+        assertThat(request.getAttribute(UserSessionLogoutHandler.FAILURE_ATTRIBUTE))
+                .isNull();
     }
 
     @Test
@@ -64,7 +65,8 @@ class UserSessionLogoutHandlerTests {
         handler.logout(request, new MockHttpServletResponse(), null);
 
         assertThat(revokedUsername).hasValue(USERNAME);
-        assertThat(request.getAttribute(UserSessionLogoutHandler.FAILURE_ATTRIBUTE)).isNull();
+        assertThat(request.getAttribute(UserSessionLogoutHandler.FAILURE_ATTRIBUTE))
+                .isNull();
     }
 
     @Test
@@ -74,7 +76,8 @@ class UserSessionLogoutHandlerTests {
 
         handler.logout(request, new MockHttpServletResponse(), null);
 
-        assertThat(request.getAttribute(UserSessionLogoutHandler.FAILURE_ATTRIBUTE)).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(request.getAttribute(UserSessionLogoutHandler.FAILURE_ATTRIBUTE))
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
@@ -84,7 +87,8 @@ class UserSessionLogoutHandlerTests {
 
         handler.logout(request, new MockHttpServletResponse(), null);
 
-        assertThat(request.getAttribute(UserSessionLogoutHandler.FAILURE_ATTRIBUTE)).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(request.getAttribute(UserSessionLogoutHandler.FAILURE_ATTRIBUTE))
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test

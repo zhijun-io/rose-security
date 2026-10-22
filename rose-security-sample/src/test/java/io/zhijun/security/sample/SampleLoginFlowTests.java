@@ -115,6 +115,33 @@ class SampleLoginFlowTests {
         assertTrue(failure.getResponse().getContentType().startsWith(MediaType.APPLICATION_PROBLEM_JSON_VALUE));
     }
 
+    @Test
+    void webAuthnRegistrationOptionsAreSerializedForTheBrowser() throws Exception {
+        MvcResult login = mockMvc.perform(post("/api/auth/login")
+                        .servletPath("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"demo@example.test\",\"password\":\"password\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String accessToken = jsonMapper.readTree(login.getResponse().getContentAsString())
+                .get("access_token")
+                .asString();
+
+        mockMvc.perform(post("/api/me/mfa/webauthn/register/options")
+                        .servletPath("/api/me/mfa/webauthn/register/options")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.challengeToken")
+                        .isNotEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.publicKey.challenge")
+                        .isString())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                                "$.publicKey.authenticatorSelection.userVerification")
+                        .value("required"));
+    }
+
     @TestConfiguration(proxyBeanMethods = false)
     static class PreferredAuthenticationManagerConfiguration {
 

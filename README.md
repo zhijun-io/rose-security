@@ -9,7 +9,7 @@ A Spring Boot starter for local email/password authentication, JWT access tokens
 | Local login, access token, session tracking, single/all-session logout | Implemented |
 | Refresh token rotation | Implemented; enabled by default and independently configurable |
 | JDBC / Redis session stores | Optional adapters; auto-configured from available adapter and infrastructure beans |
-| MFA | Not implemented |
+| MFA | TOTP and Email implemented; WebAuthn/passkey login, enrollment and removal implemented |
 | OAuth2 / OIDC client login | Not implemented |
 | Authorization server | Out of scope |
 
@@ -17,7 +17,7 @@ Target baseline: Java 25, Spring Boot 4.1.1, Spring Security 7, Maven. Check the
 
 ## Implemented capabilities
 
-- **Filter-based authentication endpoints:** configurable login, refresh, logout, and logout-all paths. The host explicitly applies `AuthSecurityConfigurer` to its own `SecurityFilterChain`; the Starter does not claim or replace the chain.
+- **Filter-based authentication endpoints:** configurable login, MFA verify, refresh, logout, and logout-all paths. The host explicitly applies `AuthSecurityConfigurer` to its own `SecurityFilterChain`; the Starter does not claim or replace the chain.
 - **Local email/password login:** authenticates through Spring Security's `AuthenticationManager` and `UserDetailsService`, then issues the Starter's own access token. The host owns user lookup and password encoding.
 - **JWT access tokens:** default RS256 signing and validation with issuer, audience, expiry, session ID, security version, authentication time, and authentication-method claims. Keys come from a host `JWKSource`, configured PEM files, or host-provided Spring Security encoder/decoder beans.
 - **Public signing keys:** when a `JWKSource` is available, `GET /.well-known/jwks.json` publishes public signing keys only. It does not provide OAuth2 authorization-server endpoints or discovery metadata.
@@ -28,7 +28,7 @@ Target baseline: Java 25, Spring Boot 4.1.1, Spring Security 7, Maven. Check the
 - **Client details and remote-login hook:** captures client IP and a bounded User-Agent description for session records. Remote-login detection/notification is disabled by default and delegates to a host-provided handler.
 - **Spring Security extension points:** host implementations can replace authentication, JWT encoding/decoding, session storage, success/failure handling, logout behavior, and client-detail extraction through standard Spring Security interfaces or the documented Starter contracts.
 
-MFA, OAuth2/OIDC client login, authorization-server behavior, password management, user/account persistence, audit storage/event publishing, and session-list HTTP endpoints are not implemented. The Starter also does not add rate-limiting behavior or dependencies.
+MFA is disabled by default and is never forced. After password verification, the user enters MFA only when they have at least one enrolled factor that is also enabled by the configured policy; when multiple factors are available, the client chooses one. The login filter returns `202 Accepted` with an opaque short-lived transaction and issues no session or JWT until verification succeeds. `/mfa/verify` delegates proofs through Spring Security `AuthenticationProvider`; successful verification creates the ordinary user session and JWT. TOTP, Email and WebAuthn have enrollment, login verification and verified removal flows. Binding/removal does not revoke sessions or log out the user. The host supplies encrypted TOTP credential persistence, Email challenge persistence and sender, WebAuthn credential/user-entity repositories, WebAuthn one-time challenge persistence, and short-lived login-transaction storage. WebAuthn validation, RP ID/Origin checking, registration and assertion verification use Spring Security's WebAuthn implementation. JDBC or Redis persistence for WebAuthn credentials/challenges is not included; the sample stores are volatile and demo-only. Wallet, recovery-code and mnemonic factors are not implemented. OAuth2/OIDC client login, authorization-server behavior, password management, user/account persistence, audit storage/event publishing, and session-list HTTP endpoints are not implemented. The Starter also does not add rate-limiting behavior or dependencies.
 
 ## Modules
 
@@ -42,7 +42,7 @@ MFA, OAuth2/OIDC client login, authorization-server behavior, password managemen
 | `rose-security-spring-boot-starter` | Convenient dependency on the auto-configuration and its runtime requirements |
 | `rose-security-sample` | Runnable host-owned security chain and React demo |
 
-MFA and OAuth2/OIDC integration artifacts are not implemented. JDBC and Redis adapters are separate optional dependencies and are not pulled in by the main starter. No limiter dependency, configuration, storage, or extension point is provided.
+TOTP, Email, and WebAuthn MFA are implemented in the auto-configuration module. TOTP relies on the host credential store; Email relies on the host challenge store and sender; WebAuthn relies on Spring Security's WebAuthn APIs and host credential/challenge stores. The main Starter does not depend on Spring Mail or any mail vendor. JDBC and Redis session adapters are separate optional dependencies and are not pulled in by the main starter. No limiter dependency, configuration, storage, or extension point is provided.
 
 ## Add the dependency
 
@@ -90,9 +90,21 @@ auth:
       when-limit-reached: deny-new # deny-new or revoke-oldest
     remote-login:
       enabled: false
+    mfa:
+      enabled: false
+      methods: [] # totp, email, webauthn
+      transaction-ttl: 5m
+      maximum-attempts: 5
+      totp-issuer: Rose Security
+      webauthn-rp-id: auth.example.test
+      webauthn-allowed-origins:
+        - https://auth.example.test
     endpoints:
       base-path: /api/auth
       login: /login
+      mfa-verify: /mfa/verify
+      me-mfa: /api/me/mfa
+      webauthn-options: /mfa/webauthn/options
       refresh: /refresh
       logout: /logout
       logout-all: /logout-all
@@ -125,8 +137,18 @@ The private file must contain an unencrypted PKCS#8 RSA private key (`BEGIN PRIV
 | `auth.security.session-concurrency.maximum-active-sessions` | `0` | Maximum active sessions per username; `0` means unlimited |
 | `auth.security.session-concurrency.when-limit-reached` | `deny-new` | `deny-new` or `revoke-oldest`; oldest is ordered by session creation time |
 | `auth.security.remote-login.enabled` | `false` | Enables the host-provided `RemoteLoginHandler` after a successful login token response |
+| `auth.security.mfa.enabled` | `false` | Enables the configured system MFA policy |
+| `auth.security.mfa.methods` | `[]` | Globally allowed MFA method identifiers; TOTP uses `totp` |
+| `auth.security.mfa.transaction-ttl` | `5m` | Pending login and Email MFA challenge lifetime |
+| `auth.security.mfa.maximum-attempts` | `5` | Maximum failed proofs before the host transaction or credential store invalidates a pending login or factor-management challenge |
+| `auth.security.mfa.totp-issuer` | `Rose Security` | Issuer label embedded in generated `otpauth` URIs |
+| `auth.security.mfa.webauthn-rp-id` | unset | Required when `webauthn` is allowed; must match the effective domain for the browser ceremony |
+| `auth.security.mfa.webauthn-allowed-origins` | `[]` | Exact allowed browser origins; configure HTTPS origins in deployed environments |
 | `auth.security.endpoints.base-path` | `/api/auth` | Prefix combined with each endpoint path |
 | `auth.security.endpoints.login` | `/login` | `POST`, JSON email/password |
+| `auth.security.endpoints.mfa-verify` | `/mfa/verify` | `POST`, JSON transaction token, method and proof |
+| `auth.security.endpoints.me-mfa` | `/api/me/mfa` | MFA status and factor-specific enrollment, confirmation and removal paths |
+| `auth.security.endpoints.webauthn-options` | `/mfa/webauthn/options` | Relative to `base-path`; creates assertion options for an active MFA login transaction |
 | `auth.security.endpoints.refresh` | `/refresh` | `POST`, JSON refresh token; filter exists only when refresh is enabled |
 | `auth.security.endpoints.logout` | `/logout` | `POST`, Bearer Access Token |
 | `auth.security.endpoints.logout-all` | `/logout-all` | `POST`, Bearer Access Token |
@@ -134,6 +156,12 @@ The private file must contain an unencrypted PKCS#8 RSA private key (`BEGIN PRIV
 When token issuance is enabled with a `JWKSource`, the Starter exposes public signing keys at `GET /.well-known/jwks.json`. It strips private key material and requires unique `kid` values when multiple RSA signing keys are published. The host owns its `SecurityFilterChain` and must permit this path anonymously. The endpoint does not add OAuth2 authorization-server behavior or discovery metadata.
 
 Endpoint paths are validated for absolute form and collisions. The host remains responsible for checking conflicts with application routes. Setting `auth.security.enabled=false` disables all Starter auto-configuration; disabling refresh leaves the configured refresh path unhandled by this Starter.
+
+To enable TOTP, set `auth.security.mfa.enabled=true`, allow `totp` in `methods`, and provide `TotpCredentialStore`, `MfaLoginTransactionStore`, and `UserDetailsService` beans. With the default policy provider, only users with an enrolled, globally allowed factor are asked for MFA; users without one use password-only login. Removing the last factor also returns the user to password-only login. An application `MfaPolicyProvider` can replace how enrolled methods are resolved, but MFA cannot be made mandatory. The Starter exposes current-user status and factor-specific operations through `/api/me/mfa`: `POST /totp` starts binding, `POST /totp/verify` activates only after a valid code, and `DELETE /totp` accepts the current TOTP code before removing the factor. `TotpMfaService` generates a 20-byte secret and `otpauth` URI, accepts a ±1 30-second time-step window, and rejects a reused time step atomically. The host credential store must encrypt pending and active secrets at rest and atomically implement confirmation failure limits and step consumption. Binding and removal do not revoke sessions or log out the user; the current token's `amr` continues to describe the factors used when that token was issued. The dedicated MFA `ProviderManager` uses the built-in TOTP provider plus host `AuthenticationProvider` beans, falling back to the primary manager for other provider behavior.
+
+To enable Email MFA, allow `email` in `auth.security.mfa.methods` and provide `EmailMfaStore` plus `MfaEmailSender`. Usernames used with this built-in method must be email addresses. `POST /api/me/mfa/email` starts enrollment and sends a code; `POST /api/me/mfa/email/verify` enables it only after confirmation. `DELETE /api/me/mfa/email` sends a removal code and returns a short-lived challenge token; `POST /api/me/mfa/email/remove/verify` disables it after successful verification. The Starter generates a six-digit code and never persists or logs the raw value; the host store atomically consumes its HMAC proof and enforces the configured attempt limit. With the default policy provider, Email is used for login only after the user has bound it. Email verification depends on the security of the mailbox and is not an independent factor when that same mailbox is used to recover the primary account. The Starter does not provide SMTP configuration or depend on Spring Mail. For the sample, run `docker compose -f rose-security-sample/compose.yaml up -d`, then start it with `AUTH_SECURITY_MFA_METHODS=email ./mvnw -f rose-security-sample/pom.xml spring-boot:run`; use the UI to bind Email MFA and inspect messages at <http://localhost:8025>. Its SMTP endpoint is localhost:1025. Do not use its volatile challenge store or Mailpit for production delivery.
+
+To enable WebAuthn MFA, add `webauthn` to `auth.security.mfa.methods`, set `webauthn-rp-id` and exact `webauthn-allowed-origins`, and provide Spring Security `PublicKeyCredentialUserEntityRepository` / `UserCredentialRepository` beans plus a `WebAuthnMfaChallengeStore`. The default RP operations bean uses Spring Security 7.1's `Webauthn4JRelyingPartyOperations`; applications may replace it with their own `WebAuthnRelyingPartyOperations`. `POST /api/me/mfa/webauthn/register/options` and `POST /api/me/mfa/webauthn/register` bind a credential; `POST /api/me/mfa/webauthn/remove/options` and `POST /api/me/mfa/webauthn/remove` require an assertion with user verification before removing the asserted credential. For login, the UI requests assertion options from `POST /api/auth/mfa/webauthn/options` using the pending login transaction, then sends the assertion as the proof to the existing `/api/auth/mfa/verify` endpoint. Options are stored by hash of an opaque challenge token and bound to username, operation, expiry, and (for login) the pending transaction. Stores must atomically consume a challenge only when those bindings match. Configure the WebAuthn repositories and challenge store with shared durable storage for multi-instance production deployments. Browser WebAuthn requires a secure context (HTTPS; localhost is suitable for local development); RP ID must be the browser host or a parent domain, and each origin must exactly match scheme, host, and port.
 
 `AuthSecurityAutoConfiguration` registers the properties when `auth.security.enabled=true` (the default); JWT login and session support are part of this core behavior. Set `auth.security.enabled=false` to disable the Starter as a whole. Use one of these key integrations: provide `JWKSource<SecurityContext>`; configure both RSA PEM file properties so the Starter creates a JWK source; or provide Spring Security `JwtEncoder` and `JwtDecoder` beans directly. A host `JWKSource` takes precedence over file properties. The PEM option accepts an unencrypted PKCS#8 RSA private key and an X.509 RSA public key, requires matching keys of at least 2048 bits, and reads them from absolute filesystem paths. Keep the private key outside the repository and restrict file permissions. Token session services need `UserDetailsService` and `UserSecurityVersionProvider`. Select a JDBC or Redis store below, or provide a host `UserSessionStore`. Filter integration is conditional on the Starter being enabled plus `UserSessionService` and `JwtDecoder`; even when present, the configurer only adds filters after the host explicitly applies it to its own chain. Missing required beans while the Starter is enabled result in startup failure rather than a production in-memory fallback.
 
@@ -181,7 +209,8 @@ SecurityFilterChain apiSecurity(HttpSecurity http, AuthSecurityConfigurer auth) 
             .authorizeHttpRequests(authorize -> authorize
                     .requestMatchers(HttpMethod.POST,
                             "/api/auth/login", "/api/auth/refresh",
-                            "/api/auth/logout", "/api/auth/logout-all").permitAll()
+                            "/api/auth/logout", "/api/auth/logout-all",
+                            "/api/auth/mfa/verify").permitAll()
                     .anyRequest().authenticated())
             .oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()))
             .csrf(AbstractHttpConfigurer::disable)
@@ -239,9 +268,18 @@ The Starter does not implement audit storage or audit event publishing. Creating
 
 ## Sample and development
 
-The runnable sample uses `demo@example.test` / `password`, an in-memory session store, and a newly generated RSA key on startup. These are local demonstration fixtures only. A restart invalidates sample sessions. Do not expose the sample as a production authentication service.
+The runnable sample uses `demo@example.test` / `password`, in-memory session/MFA stores, and a newly generated RSA key on startup. MFA is optional: users without a bound factor sign in with email and password; users who bind TOTP or Email must complete that factor at their next login. To demonstrate Email MFA, start Mailpit and run the sample with `AUTH_SECURITY_MFA_METHODS=email`, then bind Email in the UI. A restart clears sample sessions and MFA credentials. The volatile sample stores are demo fixtures, not production storage; deployed `TotpCredentialStore` implementations must encrypt secrets at rest. Do not expose the sample as a production authentication service.
 
-The sample frontend and backend run separately:
+To try TOTP, sign in, select **绑定 TOTP**, add the displayed secret to an authenticator app, and confirm with its six-digit code. Sign out and sign in again to exercise the MFA login challenge. Removal is available only with a recent JWT from a TOTP-authenticated login.
+
+The sample frontend and backend run separately. For email MFA, start Mailpit and pass the MFA settings as environment configuration:
+
+```sh
+docker compose -f rose-security-sample/compose.yaml up -d
+AUTH_SECURITY_MFA_METHODS=email ./mvnw -f rose-security-sample/pom.xml spring-boot:run
+```
+
+Mailpit's inbox is available at <http://localhost:8025>. The usual frontend and backend commands are:
 
 ```bash
 mise exec -- ./mvnw install
