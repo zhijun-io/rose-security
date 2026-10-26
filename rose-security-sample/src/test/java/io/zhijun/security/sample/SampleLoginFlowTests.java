@@ -123,7 +123,8 @@ class SampleLoginFlowTests {
                         .content("{\"email\":\"demo@example.test\",\"password\":\"password\"}"))
                 .andExpect(status().isOk())
                 .andReturn();
-        String accessToken = jsonMapper.readTree(login.getResponse().getContentAsString())
+        String accessToken = jsonMapper
+                .readTree(login.getResponse().getContentAsString())
                 .get("access_token")
                 .asString();
 
@@ -133,9 +134,11 @@ class SampleLoginFlowTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.challengeToken")
-                        .isNotEmpty())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.publicKey.challenge")
+                .andExpect(
+                        org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.challengeToken")
+                                .isNotEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                                "$.publicKey.challenge")
                         .isString())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
                                 "$.publicKey.authenticatorSelection.userVerification")

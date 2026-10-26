@@ -7,26 +7,27 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.1</version>
+        <version>4.1.2</version>
         <relativePath/>
     </parent>
 
     <groupId>io.zhijun</groupId>
-    <artifactId>rose-security-spring-boot-starter-parent</artifactId>
+    <artifactId>rose-security</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>Rose Security Spring Boot Starter Parent</name>
+    <name>Rose Security</name>
     <description>Reusable JWT authentication and token session management for Spring Boot APIs.
     </description>
-
     <modules>
-        <module>rose-security-spring-boot-starter-bom</module>
-        <module>rose-security-spring-boot-core</module>
+        <module>rose-security-bom</module>
+        <module>rose-security-core</module>
         <module>rose-security-spring-boot-jdbc</module>
         <module>rose-security-spring-boot-redis</module>
         <module>rose-security-spring-boot-autoconfigure</module>
+        <module>rose-security-spring-boot-mfa</module>
         <module>rose-security-spring-boot-starter</module>
         <module>rose-security-sample</module>
+        <module>rose-security-coverage</module>
     </modules>
 
     <properties>
@@ -36,6 +37,7 @@
         <ua-parser.version>1.6.1</ua-parser.version>
         <java-otp.version>1.0.0</java-otp.version>
         <commons-codec.version>1.23.0</commons-codec.version>
+        <jacoco.version>0.8.15</jacoco.version>
     </properties>
 
     <dependencyManagement>
@@ -57,12 +59,17 @@
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
-                <artifactId>rose-security-spring-boot-core</artifactId>
+                <artifactId>rose-security-core</artifactId>
                 <version>${rose-security.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-spring-boot-autoconfigure</artifactId>
+                <version>${rose-security.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.zhijun</groupId>
+                <artifactId>rose-security-spring-boot-mfa</artifactId>
                 <version>${rose-security.version}</version>
             </dependency>
             <dependency>
@@ -88,6 +95,17 @@
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
                 <artifactId>spotless-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-coverage-agent</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
         <pluginManagement>

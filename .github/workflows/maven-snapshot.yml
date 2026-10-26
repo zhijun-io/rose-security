@@ -1,0 +1,22 @@
+name: Maven Snapshot
+
+on:
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: snapshot-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    uses: zhijun-io/github-workflows/.github/workflows/maven-snapshot.yml@main
+    with:
+      java-version: '25'
+      skip-tests: true
+    secrets:
+      MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+      MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}

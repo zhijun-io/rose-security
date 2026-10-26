@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: zhijun-io/github-workflows/.github/workflows/ci.yml@main
+    with:
+      java-version: '25'
+      upload-test-results: false
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Verify library coverage
+        run: ./mvnw -B -ntp -pl rose-security-coverage -am verify
+      - name: Upload library coverage to Codecov
+        uses: codecov/codecov-action@v7.1.1
+        with:
+          files: rose-security-coverage/target/site/jacoco-aggregate/jacoco.xml
+          flags: library
+          name: rose-security-library
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}

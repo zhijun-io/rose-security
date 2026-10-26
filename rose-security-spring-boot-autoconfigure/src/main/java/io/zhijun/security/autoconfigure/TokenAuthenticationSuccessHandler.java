@@ -1,6 +1,7 @@
 package io.zhijun.security.autoconfigure;
 
 import io.zhijun.security.core.IssuedSessionTokens;
+import io.zhijun.security.core.UserSessionAuthenticationDetails;
 import io.zhijun.security.core.UserSessionClientInfo;
 import io.zhijun.security.core.UserSessionException;
 import io.zhijun.security.core.UserSessionService;
@@ -88,15 +89,9 @@ public class TokenAuthenticationSuccessHandler implements AuthenticationSuccessH
             return null;
         }
         try {
-            if (authentication.getDetails() instanceof MfaLoginCompletion completion) {
-                java.util.Set<String> methods =
-                        new java.util.HashSet<>(completion.transaction().authenticationMethods());
-                methods.add(completion.method());
+            if (authentication.getDetails() instanceof UserSessionAuthenticationDetails details) {
                 return userSessionService.create(
-                        principal,
-                        methods,
-                        completion.authenticatedAt(),
-                        completion.transaction().clientInfo());
+                        principal, details.authenticationMethods(), details.authenticatedAt(), details.clientInfo());
             }
             return userSessionService.create(
                     principal, Set.of("pwd"), clock.instant(), clientInfoSource.buildDetails(request));
@@ -122,9 +117,10 @@ public class TokenAuthenticationSuccessHandler implements AuthenticationSuccessH
             return;
         }
         try {
-            UserSessionClientInfo clientInfo = authentication.getDetails() instanceof MfaLoginCompletion completion
-                    ? completion.transaction().clientInfo()
-                    : clientInfoSource.buildDetails(request);
+            UserSessionClientInfo clientInfo =
+                    authentication.getDetails() instanceof UserSessionAuthenticationDetails details
+                            ? details.clientInfo()
+                            : clientInfoSource.buildDetails(request);
             remoteLoginHandler.handle(user.getUsername(), clientInfo, tokens.sessionId());
         } catch (RuntimeException exception) {
             logger.warn("Remote-login handling failed; the authenticated response was already written");

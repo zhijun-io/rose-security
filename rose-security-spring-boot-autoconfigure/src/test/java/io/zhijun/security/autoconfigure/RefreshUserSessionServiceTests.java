@@ -114,6 +114,18 @@ class RefreshUserSessionServiceTests {
                                 .isEqualTo(UserSessionException.Reason.SESSION_LIMIT_REACHED));
     }
 
+    @Test
+    void rejectsMalformedRefreshTokensAndIgnoresBlankSessionQueries() {
+        Fixture fixture = new Fixture();
+
+        assertThatThrownBy(() -> fixture.service.refresh(null)).isInstanceOf(UserSessionException.class);
+        assertThatThrownBy(() -> fixture.service.refresh("short-token")).isInstanceOf(UserSessionException.class);
+        assertThat(fixture.service.revoke(null, "session")).isFalse();
+        assertThat(fixture.service.revoke(USERNAME, " ")).isFalse();
+        assertThat(fixture.service.revokeAll(" ")).isZero();
+        assertThat(fixture.service.findActiveSessions(null)).isEmpty();
+    }
+
     private static final class Fixture {
 
         private final UserDetails user = User.withUsername(USERNAME)

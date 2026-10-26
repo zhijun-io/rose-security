@@ -17,8 +17,8 @@ import org.springframework.stereotype.Component;
 
 /** Volatile demo-only MFA store. Production stores must encrypt TOTP secrets at rest. */
 @Component
-public class SampleMfaStore implements
-        TotpCredentialStore, MfaLoginTransactionStore, EmailMfaStore, WebAuthnMfaChallengeStore {
+public class SampleMfaStore
+        implements TotpCredentialStore, MfaLoginTransactionStore, EmailMfaStore, WebAuthnMfaChallengeStore {
 
     private final Map<String, PendingTotp> pendingTotp = new HashMap<>();
     private final Map<String, TotpCredential> activeTotp = new HashMap<>();

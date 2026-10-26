@@ -2,6 +2,7 @@ package io.zhijun.security.sample;
 
 import io.zhijun.security.autoconfigure.AuthSecurityConfigurer;
 import io.zhijun.security.autoconfigure.JwksEndpoint;
+import io.zhijun.security.autoconfigure.MfaSecurityConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -52,9 +53,11 @@ public class SampleSecurityConfiguration {
 
     @Bean
     @Order(1)
-    SecurityFilterChain sampleApiChain(HttpSecurity http, AuthSecurityConfigurer auth) throws Exception {
+    SecurityFilterChain sampleApiChain(HttpSecurity http, AuthSecurityConfigurer auth, MfaSecurityConfigurer mfa)
+            throws Exception {
         return http.securityMatcher("/api/**", JwksEndpoint.PATH)
                 .with(auth, Customizer.withDefaults())
+                .with(mfa, Customizer.withDefaults())
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
                                 HttpMethod.POST,

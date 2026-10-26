@@ -11,10 +11,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 @AutoConfiguration
-@AutoConfigureAfter(name = {
-    "io.zhijun.security.session.jdbc.JdbcUserSessionStoreAutoConfiguration",
-    "org.springframework.boot.data.redis.autoconfigure.RedisAutoConfiguration"
-})
+@AutoConfigureAfter(
+        name = {
+            "io.zhijun.security.session.jdbc.JdbcUserSessionStoreAutoConfiguration",
+            "org.springframework.boot.data.redis.autoconfigure.RedisAutoConfiguration"
+        })
 @ConditionalOnClass(StringRedisTemplate.class)
 @ConditionalOnProperty(prefix = "auth.security", name = "enabled", havingValue = "true", matchIfMissing = true)
 @ConditionalOnBean(StringRedisTemplate.class)

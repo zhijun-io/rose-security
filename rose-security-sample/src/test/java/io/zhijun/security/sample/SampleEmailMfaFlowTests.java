@@ -58,6 +58,11 @@ class SampleEmailMfaFlowTests {
     void enrollmentLoginAndRemovalRequireEmailProofWithoutLoggingOut() throws Exception {
         String accessToken = login().get("access_token").asString();
 
+        mockMvc.perform(post("/api/me/mfa/totp")
+                        .servletPath("/api/me/mfa/totp")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isNotFound());
+
         MvcResult enrollment = mockMvc.perform(post("/api/me/mfa/email")
                         .servletPath("/api/me/mfa/email")
                         .header("Authorization", "Bearer " + accessToken)

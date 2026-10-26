@@ -1,0 +1,2 @@
+io.zhijun.security.autoconfigure.MfaAutoConfiguration
+io.zhijun.security.autoconfigure.WebAuthnMfaAutoConfiguration

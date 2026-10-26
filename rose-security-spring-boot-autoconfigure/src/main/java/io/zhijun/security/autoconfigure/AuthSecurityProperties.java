@@ -6,7 +6,6 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import java.time.Duration;
-import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.validation.annotation.Validated;
@@ -19,8 +18,7 @@ public record AuthSecurityProperties(
         @Valid Jwt jwt,
         @Valid Endpoints endpoints,
         @Valid SessionConcurrency sessionConcurrency,
-        @Valid RemoteLogin remoteLogin,
-        @Valid Mfa mfa) {
+        @Valid RemoteLogin remoteLogin) {
 
     @ConstructorBinding
     public AuthSecurityProperties {
@@ -29,20 +27,10 @@ public record AuthSecurityProperties(
         endpoints = endpoints == null ? Endpoints.defaults() : endpoints;
         sessionConcurrency = sessionConcurrency == null ? SessionConcurrency.defaults() : sessionConcurrency;
         remoteLogin = remoteLogin == null ? RemoteLogin.defaults() : remoteLogin;
-        mfa = mfa == null ? Mfa.defaults() : mfa;
     }
 
     public AuthSecurityProperties(Boolean enabled, Jwt jwt, Endpoints endpoints) {
-        this(enabled, jwt, endpoints, null, null, null);
-    }
-
-    public AuthSecurityProperties(
-            Boolean enabled,
-            Jwt jwt,
-            Endpoints endpoints,
-            SessionConcurrency sessionConcurrency,
-            RemoteLogin remoteLogin) {
-        this(enabled, jwt, endpoints, sessionConcurrency, remoteLogin, null);
+        this(enabled, jwt, endpoints, null, null);
     }
 
     public record SessionConcurrency(
@@ -62,57 +50,6 @@ public record AuthSecurityProperties(
 
         public static RemoteLogin defaults() {
             return new RemoteLogin(false);
-        }
-    }
-
-    public record Mfa(
-            boolean enabled,
-            Set<@jakarta.validation.constraints.Pattern(regexp = "[a-z][a-z0-9-]{0,31}") String> methods,
-            Duration transactionTtl,
-            @Min(1) Integer maximumAttempts,
-            String totpIssuer,
-            String webauthnRpId,
-            Set<String> webauthnAllowedOrigins) {
-
-        public Mfa(
-                boolean enabled,
-                Set<String> methods,
-                Duration transactionTtl,
-                Integer maximumAttempts,
-                String totpIssuer) {
-            this(enabled, methods, transactionTtl, maximumAttempts, totpIssuer, null, Set.of());
-        }
-
-        @ConstructorBinding
-        public Mfa {
-            methods = methods == null ? Set.of() : Set.copyOf(methods);
-            transactionTtl = transactionTtl == null ? Duration.ofMinutes(5) : transactionTtl;
-            maximumAttempts = maximumAttempts == null ? 5 : maximumAttempts;
-            totpIssuer = totpIssuer == null || totpIssuer.isBlank() ? "Rose Security" : totpIssuer;
-            webauthnRpId = webauthnRpId == null || webauthnRpId.isBlank() ? null : webauthnRpId;
-            webauthnAllowedOrigins = webauthnAllowedOrigins == null ? Set.of() : Set.copyOf(webauthnAllowedOrigins);
-        }
-
-        @AssertTrue(message = "Enabled MFA requires at least one method")
-        public boolean isPolicyConfigurationValid() {
-            return !enabled || !methods.isEmpty();
-        }
-
-        @AssertTrue(message = "WebAuthn MFA requires an RP ID and at least one allowed origin")
-        public boolean isWebauthnConfigurationValid() {
-            return !methods.contains("webauthn")
-                    || (webauthnRpId != null
-                            && !webauthnAllowedOrigins.isEmpty()
-                            && webauthnAllowedOrigins.stream().noneMatch(String::isBlank));
-        }
-
-        @AssertTrue(message = "MFA transaction TTL must be positive")
-        public boolean isTransactionTtlPositive() {
-            return transactionTtl != null && !transactionTtl.isZero() && !transactionTtl.isNegative();
-        }
-
-        public static Mfa defaults() {
-            return new Mfa(false, Set.of(), null, 5, null, null, Set.of());
         }
     }
 
@@ -177,30 +114,7 @@ public record AuthSecurityProperties(
             @NotBlank String login,
             @NotBlank String refresh,
             @NotBlank String logout,
-            @NotBlank String logoutAll,
-            @NotBlank String mfaVerify,
-            @NotBlank String meMfa,
-            @NotBlank String webauthnOptions) {
-
-        public Endpoints(String basePath, String login, String refresh, String logout, String logoutAll) {
-            this(basePath, login, refresh, logout, logoutAll, "/mfa/verify", "/api/me/mfa", "/mfa/webauthn/options");
-        }
-
-        public Endpoints(
-                String basePath, String login, String refresh, String logout, String logoutAll, String mfaVerify) {
-            this(basePath, login, refresh, logout, logoutAll, mfaVerify, "/api/me/mfa", "/mfa/webauthn/options");
-        }
-
-        public Endpoints(
-                String basePath,
-                String login,
-                String refresh,
-                String logout,
-                String logoutAll,
-                String mfaVerify,
-                String meMfa) {
-            this(basePath, login, refresh, logout, logoutAll, mfaVerify, meMfa, "/mfa/webauthn/options");
-        }
+            @NotBlank String logoutAll) {
 
         @ConstructorBinding
         public Endpoints {
@@ -209,9 +123,6 @@ public record AuthSecurityProperties(
             refresh = refresh == null ? "/refresh" : refresh;
             logout = logout == null ? "/logout" : logout;
             logoutAll = logoutAll == null ? "/logout-all" : logoutAll;
-            mfaVerify = mfaVerify == null ? "/mfa/verify" : mfaVerify;
-            meMfa = meMfa == null ? "/api/me/mfa" : meMfa;
-            webauthnOptions = webauthnOptions == null ? "/mfa/webauthn/options" : webauthnOptions;
         }
 
         @AssertTrue(message = "Authentication endpoint paths must be absolute paths and must not collide")
@@ -221,29 +132,12 @@ public record AuthSecurityProperties(
                     && absolute(refresh)
                     && absolute(logout)
                     && absolute(logoutAll)
-                    && absolute(mfaVerify)
-                    && absolute(meMfa)
-                    && absolute(webauthnOptions)
                     && !login.equals(refresh)
                     && !login.equals(logout)
                     && !login.equals(logoutAll)
                     && !refresh.equals(logout)
                     && !refresh.equals(logoutAll)
-                    && !logout.equals(logoutAll)
-                    && !mfaVerify.equals(login)
-                    && !mfaVerify.equals(refresh)
-                    && !mfaVerify.equals(logout)
-                    && !mfaVerify.equals(logoutAll)
-                    && !meMfa.equals(mfaVerify)
-                    && !meMfa.equals(login)
-                    && !meMfa.equals(refresh)
-                    && !meMfa.equals(logout)
-                    && !meMfa.equals(logoutAll)
-                    && !webauthnOptions.equals(mfaVerify)
-                    && !webauthnOptions.equals(login)
-                    && !webauthnOptions.equals(refresh)
-                    && !webauthnOptions.equals(logout)
-                    && !webauthnOptions.equals(logoutAll);
+                    && !logout.equals(logoutAll);
         }
 
         private static boolean absolute(String path) {
@@ -251,15 +145,7 @@ public record AuthSecurityProperties(
         }
 
         public static Endpoints defaults() {
-            return new Endpoints(
-                    "/api/auth",
-                    "/login",
-                    "/refresh",
-                    "/logout",
-                    "/logout-all",
-                    "/mfa/verify",
-                    "/api/me/mfa",
-                    "/mfa/webauthn/options");
+            return new Endpoints("/api/auth", "/login", "/refresh", "/logout", "/logout-all");
         }
     }
 }
