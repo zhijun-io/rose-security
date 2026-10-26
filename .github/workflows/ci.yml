@@ -31,12 +31,13 @@ jobs:
           java-version: '25'
           cache: maven
       - name: Verify library coverage
-        run: ./mvnw -B -ntp -pl rose-security-coverage -am verify
+        run: ./mvnw -B -ntp -Pcoverage -pl rose-security-coverage -am verify
       - name: Upload library coverage to Codecov
         uses: codecov/codecov-action@v7.1.1
         with:
           files: rose-security-coverage/target/site/jacoco-aggregate/jacoco.xml
+          disable_search: true
           flags: library
-          name: rose-security-library
+          name: rose-security
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}

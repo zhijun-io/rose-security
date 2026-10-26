@@ -121,10 +121,10 @@ mise exec -- ./mvnw test
 mise exec -- ./mvnw verify
 ```
 
-The coverage reactor is separate and excludes the sample. It aggregates line coverage for published library modules and fails below 80%:
+The `coverage` profile generates an aggregate line-coverage report for library modules and excludes the sample. Codecov enforces an 80% project target for the `library` flag; Maven only generates the report and does not enforce the percentage locally:
 
 ```sh
-mise exec -- ./mvnw -pl rose-security-coverage -am verify
+mise exec -- ./mvnw -Pcoverage -pl rose-security-coverage -am verify
 ```
 
-GitHub Actions runs the check on pull requests and uploads the aggregate JaCoCo report to Codecov. The badge reads the `library` flag directly from Codecov. For a private Codecov repository, add its upload token as the GitHub Actions secret `CODECOV_TOKEN`. See the [aggregate report](rose-security-coverage/target/site/jacoco-aggregate/index.html) after running the command locally. Run the sample with `mise run run`; frontend commands are listed in `mise.toml`.
+GitHub Actions uploads the aggregate JaCoCo report to Codecov. The badge reads the `library` flag directly from Codecov. For uploads to protected branches, configure the GitHub Actions secret `CODECOV_TOKEN` unless Codecov allows tokenless uploads for public repositories. See the [aggregate report](rose-security-coverage/target/site/jacoco-aggregate/index.html) after running the command locally. Run the sample with `mise run run`; frontend commands are listed in `mise.toml`.
