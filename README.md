@@ -2,6 +2,7 @@
 
 [![Java 25](https://img.shields.io/badge/Java-25-orange?logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![Spring Boot 4.1.2](https://img.shields.io/badge/Spring%20Boot-4.1.2-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![CI](https://github.com/zhijun-io/rose-security/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/zhijun-io/rose-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/zhijun-io/rose-security)](LICENSE)
 [![Codecov](https://codecov.io/gh/zhijun-io/rose-security/branch/main/graph/badge.svg?flag=library)](https://codecov.io/gh/zhijun-io/rose-security)
 
