@@ -29,12 +29,14 @@ permissions:
 
 jobs:
   release:
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
     uses: zhijun-io/github-workflows/.github/workflows/maven-release.yml@main
     with:
       version: ${{ inputs.version }}
       next-version: ${{ inputs.next-version }}
+      release-branch: main
       java-version: '25'
       skip-tests: ${{ inputs['skip-tests'] || false }}
     secrets:

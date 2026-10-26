@@ -10,6 +10,10 @@
     </parent>
     <artifactId>rose-security-sample</artifactId>
     <name>Rose Security Sample</name>
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <skipPublishing>true</skipPublishing>
+    </properties>
     <dependencies>
         <dependency>
             <groupId>io.zhijun</groupId>
