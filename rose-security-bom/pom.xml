@@ -16,32 +16,32 @@
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-core</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-spring-boot-autoconfigure</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-spring-boot-mfa</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-spring-boot-jdbc</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-spring-boot-redis</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-spring-boot-starter</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

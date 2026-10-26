@@ -58,13 +58,12 @@
     <properties>
         <java.version>25</java.version>
         <maven.compiler.release>25</maven.compiler.release>
-        <rose-security.version>${project.version}</rose-security.version>
         <ua-parser.version>1.6.1</ua-parser.version>
         <java-otp.version>1.0.0</java-otp.version>
         <commons-codec.version>1.23.0</commons-codec.version>
 
         <maven-gpg-plugin.version>3.2.7</maven-gpg-plugin.version>
-        <central-publishing-maven-plugin.version>0.10.0</central-publishing-maven-plugin.version>
+        <central-publishing-maven-plugin.version>0.12.0</central-publishing-maven-plugin.version>
         <jacoco.version>0.8.15</jacoco.version>
     </properties>
 
@@ -88,32 +87,32 @@
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-core</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-spring-boot-autoconfigure</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-spring-boot-mfa</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-spring-boot-jdbc</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-spring-boot-redis</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.zhijun</groupId>
                 <artifactId>rose-security-spring-boot-starter</artifactId>
-                <version>${rose-security.version}</version>
+                <version>${project.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
