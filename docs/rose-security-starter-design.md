@@ -89,7 +89,8 @@ Spring Boot 与 Spring Security 的集成实现。
   JWKS 仅作为 Resource Server 可配置的公钥来源（静态公钥或远端 JWKS URI），Rose 不提供 JWKS 发布端点；密钥发布、轮换、`kid` 选择、旧公钥保留窗口和私钥保护由宿主负责。首版 refresh token 采用不透明高熵随机值，仅以不可逆摘要形式存储；它不接受为 Bearer access token。
 - 登录、刷新、登出过滤器及成功/失败处理器。
 - 宿主提供 `SubjectResolver`，将认证成功的 Spring Security principal 映射为稳定且不可复用的 subject；映射失败则拒绝创建会话。不得默认使用可能被修改或复用的用户名、邮箱作为 subject。
-- 提供可选、不可变的 `SecurityUser` 身份快照，字段为稳定 `subject`、`sessionId` 和从 JWT `iat` 得到的 `issuedAt`。它只代表 access token 的身份与 session，不是用户实体，不包含密码、资料、角色或租户，也不替换宿主在登录时使用的 principal。
+- 提供可选、不可变的 `SecurityUser` 身份快照，字段为 `userId`、可空的 `username`、`sessionId` 和从 JWT `iat` 得到的 `issuedAt`。默认 `userId` 等于稳定且不可复用的 JWT `sub`；它不是额外的用户标识 claim。`username` 是宿主提供的可变显示/登录名，默认转换器不从 JWT 读取或生成它，因此默认值为 `null`。它不参与认证、身份绑定或授权。
+- `SecurityUser` 只代表 access token 的身份与 session，不是持久化用户实体，不包含密码、其他资料、角色或租户，也不替换宿主在登录时使用的 principal。宿主可用自己的 principal converter 或用户数据按 `userId` 填充 `username`；Rose 不查询宿主用户表，也不把 `username` 写入 JWT。
 - 提供可选的 JWT principal converter，将验证后的 JWT 转换为 `SecurityUser`；默认保留 Spring Resource Server 的 `Jwt` principal。使用转换器时，`Authentication` 的 authorities 仍由宿主的 authority converter 决定，`SecurityUser` 本身不承载授权数据。
 - 登录成功后先生成候选 `sid` 并签发完整候选凭据，再原子创建会话并保存 refresh 摘要；只有存储成功后才写响应。签名失败发生在持久化前，不留下会话；存储失败时不返回凭据。
 - 刷新时先签发候选 access token 和 refresh token，再由一次原子存储操作消费旧摘要并保存新摘要。旧凭据已消费的重放会在同一原子操作中撤销所属 session；未知、过期或已撤销凭据不改变状态。存储异常或结果未知时返回 503、不自动重试；客户端重试旧 token 可能被识别为重放并导致 session 撤销。
