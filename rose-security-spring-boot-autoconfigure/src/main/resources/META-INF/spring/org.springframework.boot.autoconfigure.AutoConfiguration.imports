@@ -1,3 +1,0 @@
-io.zhijun.security.autoconfigure.AuthSecurityAutoConfiguration
-io.zhijun.security.autoconfigure.JwtTokenAutoConfiguration
-io.zhijun.security.autoconfigure.AuthSecurityFilterAutoConfiguration
